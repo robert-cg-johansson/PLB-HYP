@@ -1,6 +1,6 @@
-######################################
-### Effect Size for Pain Tolerance ###
-######################################
+#####################################################
+### Bayes Factor + Effect Size for Pain Tolerance ###
+#####################################################
 
 # Set up your workspace
 bugsdir <- "C:/WinBUGS14"
