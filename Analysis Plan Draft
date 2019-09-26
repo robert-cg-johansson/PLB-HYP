@@ -2,7 +2,7 @@
 ### Bayes Factor + Effect Size for Pain Tolerance ###
 #####################################################
 
-# Model specification for WinBUGS (implement this as a .txt file ('Pain_tolerance.txt') cand call it from your working directory)
+# Model specification for WinBUGS (implement this as a .txt file ('Pain_tolerance.txt') and call it from your working directory)
 model{
   # Data
   for (i in 1:ndata){
