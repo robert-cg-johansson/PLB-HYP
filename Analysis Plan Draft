@@ -2,7 +2,7 @@
 ### Bayes Factor + Effect Size for Pain Tolerance ###
 #####################################################
 
-# Model specification for WinBUGS (implement this as a .txt file called from your working directory)
+# Model specification for WinBUGS (implement this as a .txt file ('Pain_tolerance.txt') cand call it from your working directory)
 model{
   # Data
   for (i in 1:ndata){
@@ -95,7 +95,7 @@ parameters <- c("delta")
 # The following command calls WinBUGS with specific options.
 # For a detailed description see Sturtz, Ligges, & Gelman (2005).
 samples <- bugs(data, inits=myinits, parameters,
-	 			model.file ="OneSample.txt",
+	 			model.file ="Pain_tolerance.txt",
 	 			n.chains=3, n.iter=10000, n.burnin=1000, n.thin=1,
 	 			DIC=T, bugs.directory=bugsdir,
 	 			codaPkg=F, debug=T)
