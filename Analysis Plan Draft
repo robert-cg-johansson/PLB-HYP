@@ -4,7 +4,7 @@
 
 # Set up your workspace
 rm(list = ls(all.names = TRUE))
-bugsdir <- "C:/WinBUGS14" # Downlod WibBUGS from https://www.mrc-bsu.cam.ac.uk/software/bugs/
+bugsdir <- "C:/WinBUGS14" # Downlod WinBUGS from https://www.mrc-bsu.cam.ac.uk/software/bugs/
 setwd("C:/MyWorkingDirectory/")
 setwd("C:/ExcercisesforR/")
 
