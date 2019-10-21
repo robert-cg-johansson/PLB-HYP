@@ -3,41 +3,42 @@
 ###################################################
 
 # Set up your workspace
-rm(list = ls(all.names = TRUE))
-bugsdir <- "C:/WinBUGS14" # Downlod WibBUGS from https://www.mrc-bsu.cam.ac.uk/software/bugs/
-setwd("C:/MyWorkingDirectory/")
+rm(list=ls())
+bugsdir <- "C:/WinBUGS14" # Download WinBUGS from https://www.mrc-bsu.cam.ac.uk/software/bugs/
 setwd("C:/ExcercisesforR/")
 
 # Packages Required
 library(R2WinBUGS) #for bugs
+library(polspline) #for logspline
 
 #########################################################################
 # I. Differential Pain Tolerance For Conventional and Embedded Hypnosis #
 #########################################################################
 
-# Model specification for WinBUGS (implement this as a .txt file ('Pain_tolerance.txt') and call it from your working directory)
+# Model specification for WinBUGS (implement this as a .txt file ('PLB-HYP_means.txt') and call it from your working directory)
 model{
 # Data
 for (i in 1:ndata){
-x[i] ~ dnorm(mu,lambda)
+  x[i] ~ dnorm(mu,lambda)
 } 
 mu <- delta*sigma
 lambda <- pow(sigma,-2)
-# delta and sigma come from half-Cauchy distributions
+# delta and sigma Come From (Half) Cauchy Distributions
 lambdadelta ~ dchisqr(1)
-delta ~ dnorm(0,lambdadelta)
+delta ~ dnorm(0,lambdadelta)I(,0)
 lambdasigma ~ dchisqr(1)
-sigmatmp ~ dnorm(70,lambdasigma)
+sigmatmp ~ dnorm(0,lambdasigma)
 sigma <- abs(sigmatmp)
 # Sampling from Prior Distribution for Delta
-deltaprior ~ dnorm(0,lambdadeltaprior)
+deltaprior ~ dnorm(0,lambdadeltaprior)I(,0)
 lambdadeltaprior ~ dchisqr(1)
+}
 
 ### END of model specification ###
 
 # Fabricate some data
-Placebo_pain_tolerance <- rnorm(40, mean = 45, sd=12)
-Hypnosis_pain_tolerance <- rnorm(40, mean=54, sd=12)
+Placebo_pain_tolerance <- rnorm(50, mean = 165, sd=70)
+Hypnosis_pain_tolerance <- rnorm(50, mean = 180, sd=70)
 
 # Compute within-subjects raw differences and standardize them
 x <- Placebo_pain_tolerance - Hypnosis_pain_tolerance 
@@ -47,25 +48,25 @@ x <- x/sd(x)
 ndata <- length(Placebo_pain_tolerance)
 
 # To be passed on to WinBUGS
-data  <- list("x", "ndata") 
+data  <- list("x", "ndata") # to be passed on to WinBUGS
 
 myinits <- list(
-list(delta = rnorm(1,0,3)),
-list(delta = rnorm(1,0,3)),
-list(delta = rnorm(1,0,3)))
+  list(deltatmp = runif(1), sigmatmp = runif(1)),
+  list(deltatmp = runif(1), sigmatmp = runif(1)),
+  list(deltatmp = runif(1), sigmatmp = runif(1)))
 
 # Parameters to be monitored
 parameters <- c("delta")
 
-# The following command calls WinBUGS from R
-# The burn-in is set to 1000 with no thinning of the MCMC chains. 3 Chains.
+# The following command calls WinBUGS with specific options.
+# For a detailed description see Sturtz, Ligges, & Gelman (2005).
 samples <- bugs(data, inits=myinits, parameters,
-          model.file ="OneSample.txt",
-          n.chains=3, n.iter=10000, n.burnin=1000, n.thin=1,
-          DIC=T, bugs.directory=bugsdir,
-          codaPkg=F, debug=T)
-
+                model.file="PLB-HYP-means.txt",
+                n.chains=3, n.iter=10000, n.burnin=1000, n.thin=1,
+                DIC=T, bugs.directory=bugsdir,
+                codaPkg=F, debug=T)
 # Now the values for the monitored parameters are in the "samples" object, 
+# ready for inspection.
 
 samples$summary # overview
 
@@ -76,26 +77,29 @@ delta.posterior <- samples$sims.list$delta
 library(polspline) # this package can be installed from within R
 fit.posterior <- logspline(delta.posterior)
 
+#============ BFs based on logspline fit ===========================
+fit.posterior <- logspline(delta.posterior,ubound=0) # NB. note the bound
+
 # 95% confidence interval:
 x0 <- qlogspline(0.025,fit.posterior)
 x1 <- qlogspline(0.975,fit.posterior)
 
 posterior <- dlogspline(0, fit.posterior) # this gives the pdf at point delta = 0
-prior     <- dcauchy(0)                   # height of order--restricted prior at delta = 0
+prior     <- 2*dcauchy(0)                 # height of order--restricted prior at delta = 0
 BF01      <- posterior/prior
 BF01
 
 #============ Plot Prior and Posterior  ===========================
 par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, mgp = c(3.5, 1, 0), cex.lab = 1.5,
-font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
+    font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
 xlow  <- -3
-xhigh <- 3
-yhigh <- 4
+xhigh <- 0
+yhigh <- 12
 Nbreaks <- 80
-y       <- hist(delta.posterior, Nbreaks, plot=F)
+y <- hist(delta.posterior, Nbreaks, plot=F)
 plot(c(y$breaks, max(y$breaks)), c(0,y$density,0), type="S", lwd=2, lty=2,
-xlim=c(xlow,xhigh), ylim=c(0,yhigh), xlab=" ", ylab="Density", axes=F) 
-axis(1, at = c(-4,-3,-2,-1,0,1,2,3,4), lab=c("-4","-3","-2","-1","0", "1", "2", "3", "4"))
+     xlim=c(xlow,xhigh), ylim=c(0,yhigh), xlab=" ", ylab="Posterior Density", main = "Sham Hypnosis Tolerance Disadvantage", axes=F) 
+axis(1, at = c(-3,-2,-1,0), lab=c("-3","-2","-1","0"))
 axis(2)
 mtext(expression(delta), side=1, line = 2.8, cex=2)
 #now bring in log spline density estimation:
@@ -104,16 +108,120 @@ plot(fit.posterior, ylim=c(0,yhigh), xlim=c(xlow,xhigh), lty=1, lwd=1, axes=F)
 points(0, dlogspline(0, fit.posterior),pch=19, cex=2)
 # plot the prior:
 par(new=T)
-plot ( function( x ) dcauchy( x, 0, 1 ), xlow, xhigh, ylim=c(0,yhigh), xlim=c(xlow,xhigh), lwd=2, lty=1, ylab=" ", xlab = " ", axes=F) 
-axis(1, at = c(-4,-3,-2,-1,0,1,2,3,4), lab=c("-4","-3","-2","-1","0", "1", "2", "3", "4"))
+plot ( function( x ) 2*dcauchy( x, 0, 1 ), xlow, xhigh, ylim=c(0,yhigh), xlim=c(xlow,xhigh), lwd=2, lty=1, ylab=" ", xlab = " ", axes=F) 
+axis(1, at = c(-3,-2,-1,0), lab=c("-3","-2","-1","0"))
 axis(2)
-points(0, dcauchy(0), pch=19, cex=2)
+points(0, 2*dcauchy(0), pch=19, cex=2)
+
 
 ##########################################################################
 # II. Differential Hypnotic Depth For Conventional and Embedded Hypnosis #
 ##########################################################################
 
-# Model specification for WinBUGS (implement this as a .txt file ('Hypnotic_depth.txt') and call it from your working directory)
+# Model specification for WinBUGS (implement this as a .txt file ('PLB-HYP_means.txt') and call it from your working directory)
+model{
+  # Data
+  for (i in 1:ndata){
+    x[i] ~ dnorm(mu,lambda)
+  } 
+  mu <- delta*sigma
+  lambda <- pow(sigma,-2)
+  # delta and sigma Come From (Half) Cauchy Distributions
+  lambdadelta ~ dchisqr(1)
+  delta ~ dnorm(0,lambdadelta)I(,0)
+  lambdasigma ~ dchisqr(1)
+  sigmatmp ~ dnorm(0,lambdasigma)
+  sigma <- abs(sigmatmp)
+  # Sampling from Prior Distribution for Delta
+  deltaprior ~ dnorm(0,lambdadeltaprior)I(,0)
+  lambdadeltaprior ~ dchisqr(1)
+}
+
+### END of model specification ###
+
+# Fabricate some data
+Placebo_hypnotic_depth <- rnorm(50, mean = 5, sd=2.6)
+Hypnosis_hypnotic_depth <- rnorm(50, mean= 6, sd=2.6)
+
+# Compute within-subjects raw differences and standardize them
+x <- Placebo_hypnotic_depth - Hypnosis_hypnotic_depth 
+x <- x/sd(x)      
+
+#Set number of subjects
+ndata <- length(Placebo_pain_tolerance)
+
+# To be passed on to WinBUGS
+data  <- list("x", "ndata") # to be passed on to WinBUGS
+
+myinits <- list(
+  list(deltatmp = runif(1), sigmatmp = runif(1)),
+  list(deltatmp = runif(1), sigmatmp = runif(1)),
+  list(deltatmp = runif(1), sigmatmp = runif(1)))
+
+# Parameters to be monitored
+parameters <- c("delta")
+
+# The following command calls WinBUGS with specific options.
+# For a detailed description see Sturtz, Ligges, & Gelman (2005).
+samples <- bugs(data, inits=myinits, parameters,
+                model.file="PLB-HYP_means.txt",
+                n.chains=3, n.iter=10000, n.burnin=1000, n.thin=1,
+                DIC=T, bugs.directory=bugsdir,
+                codaPkg=F, debug=T)
+# Now the values for the monitored parameters are in the "samples" object, 
+# ready for inspection.
+
+samples$summary # overview
+
+# Collect posterior samples across all chains:
+delta.posterior <- samples$sims.list$delta  
+
+#============ BFs based on logspline fit ===========================
+library(polspline) # this package can be installed from within R
+fit.posterior <- logspline(delta.posterior)
+
+#============ BFs based on logspline fit ===========================
+fit.posterior <- logspline(delta.posterior,ubound=0) # NB. note the bound
+
+# 95% confidence interval:
+x0 <- qlogspline(0.025,fit.posterior)
+x1 <- qlogspline(0.975,fit.posterior)
+
+posterior <- dlogspline(0, fit.posterior) # this gives the pdf at point delta = 0
+prior     <- 2*dcauchy(0)                 # height of order--restricted prior at delta = 0
+BF01      <- posterior/prior
+BF01
+
+#============ Plot Prior and Posterior  ===========================
+par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, mgp = c(3.5, 1, 0), cex.lab = 1.5,
+    font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
+xlow  <- -3
+xhigh <- 0
+yhigh <- 12
+Nbreaks <- 80
+y <- hist(delta.posterior, Nbreaks, plot=F)
+plot(c(y$breaks, max(y$breaks)), c(0,y$density,0), type="S", lwd=2, lty=2,
+     xlim=c(xlow,xhigh), ylim=c(0,yhigh), xlab=" ", ylab="Posterior Density", main = "Sham Hypnosis Depth Disadvantage", axes=F) 
+axis(1, at = c(-3,-2,-1,0), lab=c("-3","-2","-1","0"))
+axis(2)
+mtext(expression(delta), side=1, line = 2.8, cex=2)
+#now bring in log spline density estimation:
+par(new=T)
+plot(fit.posterior, ylim=c(0,yhigh), xlim=c(xlow,xhigh), lty=1, lwd=1, axes=F)
+points(0, dlogspline(0, fit.posterior),pch=19, cex=2)
+# plot the prior:
+par(new=T)
+plot ( function( x ) 2*dcauchy( x, 0, 1 ), xlow, xhigh, ylim=c(0,yhigh), xlim=c(xlow,xhigh), lwd=2, lty=1, ylab=" ", xlab = " ", axes=F) 
+axis(1, at = c(-3,-2,-1,0), lab=c("-3","-2","-1","0"))
+axis(2)
+points(0, 2*dcauchy(0), pch=19, cex=2)
+
+
+######################################################################################
+# III. Differential Pain Reduction Expectancy For Conventional and Embedded Hypnosis #
+######################################################################################
+
+# Model specification for WinBUGS (implement this as a .txt file ('Expected_pain_reduction.txt') and call it from your working directory)
 model{
 # Data
 for (i in 1:ndata){
@@ -134,8 +242,8 @@ lambdadeltaprior ~ dchisqr(1)
 ### END of model specification ###
 
 # Fabricate some data
-Placebo_pain_tolerance <- rnorm(40, mean = 45, sd=12)
-Hypnosis_pain_tolerance <- rnorm(40, mean=54, sd=12)
+Placebo_pain_reduction_expectancy <- rnorm(40, mean = 45, sd=12)
+Hypnosis_pain_reduction_expectancy <- rnorm(40, mean=54, sd=12)
 
 # Compute within-subjects raw differences and standardize them
 x <- Placebo_pain_tolerance - Hypnosis_pain_tolerance 
@@ -207,11 +315,11 @@ axis(1, at = c(-4,-3,-2,-1,0,1,2,3,4), lab=c("-4","-3","-2","-1","0", "1", "2", 
 axis(2)
 points(0, dcauchy(0), pch=19, cex=2)
 
-######################################################################################
-# III. Differential Pain Reduction Expectancy For Conventional and Embedded Hypnosis #
-######################################################################################
+#####################################################################################
+# IV. Differential Hypnotic Depth Expectancy For Conventional and Embedded Hypnosis #
+#####################################################################################
 
-# Model specification for WinBUGS (implement this as a .txt file ('Expected_pain_reduction.txt') and call it from your working directory)
+# Model specification for WinBUGS (implement this as a .txt file ('Expected_hypnotic_depth.txt') and call it from your working directory)
 model{
 # Data
 for (i in 1:ndata){
@@ -305,11 +413,11 @@ axis(1, at = c(-4,-3,-2,-1,0,1,2,3,4), lab=c("-4","-3","-2","-1","0", "1", "2", 
 axis(2)
 points(0, dcauchy(0), pch=19, cex=2)
 
-#####################################################################################
-# IV. Differential Hypnotic Depth Expectancy For Conventional and Embedded Hypnosis #
-#####################################################################################
+########################################
+# V. Hypnoanalgesia Manipulation Check #
+########################################
 
-# Model specification for WinBUGS (implement this as a .txt file ('Expected_hypnotic_depth.txt') and call it from your working directory)
+# Model specification for WinBUGS (implement this as a .txt file ('Hypnoanalgesia_check.txt') and call it from your working directory)
 model{
 # Data
 for (i in 1:ndata){
@@ -330,36 +438,36 @@ lambdadeltaprior ~ dchisqr(1)
 ### END of model specification ###
 
 # Fabricate some data
-Placebo_pain_tolerance <- rnorm(40, mean = 45, sd=12)
-Hypnosis_pain_tolerance <- rnorm(40, mean=54, sd=12)
+Baseline_pain_tolerance <- rnorm(40, mean = 100 , sd=70)
+Hypnosis_pain_tolerance <- rnorm(40, mean= 240, sd=70)
 
 # Compute within-subjects raw differences and standardize them
-x <- Placebo_pain_tolerance - Hypnosis_pain_tolerance 
+x <-  Baseline_pain_tolerance - Hypnosis_pain_tolerance
 x <- x/sd(x)      
 
 #Set number of subjects
-ndata <- length(Placebo_pain_tolerance)
+ndata <- length(Baseline_pain_tolerance)
 
-# To be passed on to WinBUGS
-data  <- list("x", "ndata") 
+#To be passed to WinBUGS
+data  <- list("x", "ndata") # to be passed on to WinBUGS
 
 myinits <- list(
-  list(delta = rnorm(1,0,3)),
-  list(delta = rnorm(1,0,3)),
-  list(delta = rnorm(1,0,3)))
+  list(deltatmp = runif(1), sigmatmp = runif(1)),
+  list(deltatmp = runif(1), sigmatmp = runif(1)),
+  list(deltatmp = runif(1), sigmatmp = runif(1)))
 
 # Parameters to be monitored
 parameters <- c("delta")
 
-# The following command calls WinBUGS from R
-# The burn-in is set to 1000 with no thinning of the MCMC chains. 3 Chains.
+# The following command calls WinBUGS with specific options.
+# For a detailed description see Sturtz, Ligges, & Gelman (2005).
 samples <- bugs(data, inits=myinits, parameters,
-                model.file ="OneSample.txt",
+                model.file="PLB-HYP_means.txt",
                 n.chains=3, n.iter=10000, n.burnin=1000, n.thin=1,
                 DIC=T, bugs.directory=bugsdir,
                 codaPkg=F, debug=T)
-
 # Now the values for the monitored parameters are in the "samples" object, 
+# ready for inspection.
 
 samples$summary # overview
 
@@ -370,12 +478,15 @@ delta.posterior <- samples$sims.list$delta
 library(polspline) # this package can be installed from within R
 fit.posterior <- logspline(delta.posterior)
 
+#============ BFs based on logspline fit ===========================
+fit.posterior <- logspline(delta.posterior,ubound=0) # NB. note the bound
+
 # 95% confidence interval:
 x0 <- qlogspline(0.025,fit.posterior)
 x1 <- qlogspline(0.975,fit.posterior)
 
 posterior <- dlogspline(0, fit.posterior) # this gives the pdf at point delta = 0
-prior     <- dcauchy(0)                   # height of order--restricted prior at delta = 0
+prior     <- 2*dcauchy(0)                 # height of order--restricted prior at delta = 0
 BF01      <- posterior/prior
 BF01
 
@@ -383,13 +494,13 @@ BF01
 par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, mgp = c(3.5, 1, 0), cex.lab = 1.5,
     font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
 xlow  <- -3
-xhigh <- 3
-yhigh <- 4
+xhigh <- 0
+yhigh <- 12
 Nbreaks <- 80
-y       <- hist(delta.posterior, Nbreaks, plot=F)
+y <- hist(delta.posterior, Nbreaks, plot=F)
 plot(c(y$breaks, max(y$breaks)), c(0,y$density,0), type="S", lwd=2, lty=2,
-     xlim=c(xlow,xhigh), ylim=c(0,yhigh), xlab=" ", ylab="Density", axes=F) 
-axis(1, at = c(-4,-3,-2,-1,0,1,2,3,4), lab=c("-4","-3","-2","-1","0", "1", "2", "3", "4"))
+     xlim=c(xlow,xhigh), ylim=c(0,yhigh), xlab=" ", ylab="Posterior Density", main = "Hypnoanalgesia", axes=F) 
+axis(1, at = c(-3,-2,-1,0), lab=c("-3","-2","-1","0"))
 axis(2)
 mtext(expression(delta), side=1, line = 2.8, cex=2)
 #now bring in log spline density estimation:
@@ -398,109 +509,12 @@ plot(fit.posterior, ylim=c(0,yhigh), xlim=c(xlow,xhigh), lty=1, lwd=1, axes=F)
 points(0, dlogspline(0, fit.posterior),pch=19, cex=2)
 # plot the prior:
 par(new=T)
-plot ( function( x ) dcauchy( x, 0, 1 ), xlow, xhigh, ylim=c(0,yhigh), xlim=c(xlow,xhigh), lwd=2, lty=1, ylab=" ", xlab = " ", axes=F) 
-axis(1, at = c(-4,-3,-2,-1,0,1,2,3,4), lab=c("-4","-3","-2","-1","0", "1", "2", "3", "4"))
+plot ( function( x ) 2*dcauchy( x, 0, 1 ), xlow, xhigh, ylim=c(0,yhigh), xlim=c(xlow,xhigh), lwd=2, lty=1, ylab=" ", xlab = " ", axes=F) 
+axis(1, at = c(-3,-2,-1,0), lab=c("-3","-2","-1","0"))
 axis(2)
-points(0, dcauchy(0), pch=19, cex=2)
+points(0, 2*dcauchy(0), pch=19, cex=2)
 
-########################################
-# V. Hypnoanalgesia Manipulation Check #
-########################################
 
-# Model specification for WinBUGS (implement this as a .txt file ('Hypnoanalgesia_check.txt') and call it from your working directory)
-model{
-  # Data
-  for (i in 1:ndata){
-    x[i] ~ dnorm(mu,lambda)
-  } 
-  mu <- delta*sigma
-  lambda <- pow(sigma,-2)
-  # delta and sigma come from half-Cauchy distributions
-  lambdadelta ~ dchisqr(1)
-  delta ~ dnorm(0,lambdadelta)
-  lambdasigma ~ dchisqr(1)
-  sigmatmp ~ dnorm(0,lambdasigma)
-  sigma <- abs(sigmatmp)
-  # Sampling from Prior Distribution for Delta
-  deltaprior ~ dnorm(0,lambdadeltaprior)
-  lambdadeltaprior ~ dchisqr(1)
-  
-  ### END of model specification ###
-  
-  # Fabricate some data
-  Placebo_pain_tolerance <- rnorm(40, mean = 45, sd=12)
-  Hypnosis_pain_tolerance <- rnorm(40, mean=54, sd=12)
-  
-  # Compute within-subjects raw differences and standardize them
-  x <- Placebo_pain_tolerance - Hypnosis_pain_tolerance 
-  x <- x/sd(x)      
-  
-  #Set number of subjects
-  ndata <- length(Placebo_pain_tolerance)
-  
-  # To be passed on to WinBUGS
-  data  <- list("x", "ndata") 
-  
-  myinits <- list(
-    list(delta = rnorm(1,0,3)),
-    list(delta = rnorm(1,0,3)),
-    list(delta = rnorm(1,0,3)))
-  
-  # Parameters to be monitored
-  parameters <- c("delta")
-  
-  # The following command calls WinBUGS from R
-  # The burn-in is set to 1000 with no thinning of the MCMC chains. 3 Chains.
-  samples <- bugs(data, inits=myinits, parameters,
-                  model.file ="OneSample.txt",
-                  n.chains=3, n.iter=10000, n.burnin=1000, n.thin=1,
-                  DIC=T, bugs.directory=bugsdir,
-                  codaPkg=F, debug=T)
-  
-  # Now the values for the monitored parameters are in the "samples" object, 
-  
-  samples$summary # overview
-  
-  # Collect posterior samples across all chains:
-  delta.posterior <- samples$sims.list$delta  
-  
-  #============ BFs based on logspline fit ===========================
-  library(polspline) # this package can be installed from within R
-  fit.posterior <- logspline(delta.posterior)
-  
-  # 95% confidence interval:
-  x0 <- qlogspline(0.025,fit.posterior)
-  x1 <- qlogspline(0.975,fit.posterior)
-  
-  posterior <- dlogspline(0, fit.posterior) # this gives the pdf at point delta = 0
-  prior     <- dcauchy(0)                   # height of order--restricted prior at delta = 0
-  BF01      <- posterior/prior
-  BF01
-  
-  #============ Plot Prior and Posterior  ===========================
-  par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, mgp = c(3.5, 1, 0), cex.lab = 1.5,
-      font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
-  xlow  <- -3
-  xhigh <- 3
-  yhigh <- 4
-  Nbreaks <- 80
-  y       <- hist(delta.posterior, Nbreaks, plot=F)
-  plot(c(y$breaks, max(y$breaks)), c(0,y$density,0), type="S", lwd=2, lty=2,
-       xlim=c(xlow,xhigh), ylim=c(0,yhigh), xlab=" ", ylab="Density", axes=F) 
-  axis(1, at = c(-4,-3,-2,-1,0,1,2,3,4), lab=c("-4","-3","-2","-1","0", "1", "2", "3", "4"))
-  axis(2)
-  mtext(expression(delta), side=1, line = 2.8, cex=2)
-  #now bring in log spline density estimation:
-  par(new=T)
-  plot(fit.posterior, ylim=c(0,yhigh), xlim=c(xlow,xhigh), lty=1, lwd=1, axes=F)
-  points(0, dlogspline(0, fit.posterior),pch=19, cex=2)
-  # plot the prior:
-  par(new=T)
-  plot ( function( x ) dcauchy( x, 0, 1 ), xlow, xhigh, ylim=c(0,yhigh), xlim=c(xlow,xhigh), lwd=2, lty=1, ylab=" ", xlab = " ", axes=F) 
-  axis(1, at = c(-4,-3,-2,-1,0,1,2,3,4), lab=c("-4","-3","-2","-1","0", "1", "2", "3", "4"))
-  axis(2)
-  points(0, dcauchy(0), pch=19, cex=2)
-  
 
 #########################################
 ### VI. Prefered technique proportion ###
@@ -509,10 +523,10 @@ model{
 # Model specification for WinBUGS 
 # Implement this as a .txt file ('Preference_proportion.txt') and call it from ur WD
 model{
-#Prior distribution for rate theta
-theta ~ dbeta(3,2)
-#Observed counts
-k ~ dbin(theta, n)
+  #Prior distribution for rate theta
+  theta ~ dbeta(3,2)
+  #Observed counts
+  k ~ dbin(theta, n)
 }
 
 ### END of model specification ###
@@ -522,15 +536,15 @@ k ~ dbin(theta, n)
 #k <- Preference for conventional hypnosis
 #n <- length(PLB_HYP$Prefered_technique)
 
-#Otherwise, fabricate data. The prior is dbeta(k,n-k), with k indicating a CH preference
+#Otherwise, fabricate data. The prior is dbeta(k,n-k), with k indicating a preference for conventional hypnois
 k <-  30
 n <-  50      
 
 data <- list("k", "n") # to be passed on to WinBUGS
 
 myinits <- list(
-list(theta = 0.1), #chain 1 starting value
-list(theta = 0.9)) #chain 2 starting value
+  list(theta = 0.1), #chain 1 starting value
+  list(theta = 0.9)) #chain 2 starting value
 
 # parameters to be monitored:	
 parameters <- c("theta")
@@ -538,10 +552,10 @@ parameters <- c("theta")
 # The following command calls WinBUGS with specific options.
 # For a detailed description see Sturtz, Ligges, & Gelman (2005).
 samples <- bugs(data, inits=myinits, parameters,
-          model.file ="Preference_proportion.txt",
-          n.chains=2, n.iter=20000, n.burnin=1, n.thin=1,
-          DIC=T, bugs.directory=bugsdir,
-          codaPkg=F, debug=F)
+                model.file ="Preference_proportion.txt",
+                n.chains=2, n.iter=20000, n.burnin=1, n.thin=1,
+                DIC=T, bugs.directory=bugsdir,
+                codaPkg=F, debug=F)
 # Now the values for the monitored parameters are in the "samples" object, 
 # ready for inspection.
 
@@ -559,11 +573,11 @@ theta <- samples$sims.list$theta
 # Now let's plot a histogram for theta. 
 # First, some options to make the plot look better:
 par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, mgp = c(3.5, 1, 0), cex.lab = 1.5,
-font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
+    font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
 Nbreaks <- 80
 y       <- hist(theta, Nbreaks, plot=F)
 plot(c(y$breaks, max(y$breaks)), c(0,y$density,0), type="S", lwd=2, lty=1,
-xlim=c(0,1), ylim=c(0,10), xlab="Conventional hypnosis preference rate", ylab="Posterior Density") 
+     xlim=c(0,1), ylim=c(0,10), xlab="Conventional hypnosis preference rate", ylab="Posterior Density") 
 # NB. ylim=c(0,10) defines the range of the y-axis. Adjust the upper value
 # in case your posterior distribution falls partly outside this range.
 
@@ -575,24 +589,24 @@ xlim=c(0,1), ylim=c(0,10), xlab="Conventional hypnosis preference rate", ylab="P
 # Implement this as a .txt file ('Hypnotizability_pain_reduction.txt') and call it from ur WD
 
 model{
-# Data
-for (i in 1:n){
-x[i,1:2] ~ dmnorm(mu[],TI[,])
-}
-# Priors
-mu[1] ~ dnorm(0,.001)
-mu[2] ~ dnorm(0,.001)
-lambda[1] ~ dgamma(.001,.001)
-lambda[2] ~ dgamma(.001,.001)
-r ~ dunif(-1,1)
-# Reparameterization
-sigma[1] <- 1/sqrt(lambda[1])
-sigma[2] <- 1/sqrt(lambda[2])
-T[1,1] <- 1/lambda[1]
-T[1,2] <- r*sigma[1]*sigma[2]
-T[2,1] <- r*sigma[1]*sigma[2]
-T[2,2] <- 1/lambda[2]
-TI[1:2,1:2] <- inverse(T[1:2,1:2])
+  # Data
+  for (i in 1:n){
+    x[i,1:2] ~ dmnorm(mu[],TI[,])
+  }
+  # Priors
+  mu[1] ~ dnorm(0,.001)
+  mu[2] ~ dnorm(0,.001)
+  lambda[1] ~ dgamma(.001,.001)
+  lambda[2] ~ dgamma(.001,.001)
+  r ~ dunif(-1,1)
+  # Reparameterization
+  sigma[1] <- 1/sqrt(lambda[1])
+  sigma[2] <- 1/sqrt(lambda[2])
+  T[1,1] <- 1/lambda[1]
+  T[1,2] <- r*sigma[1]*sigma[2]
+  T[2,1] <- r*sigma[1]*sigma[2]
+  T[2,2] <- 1/lambda[2]
+  TI[1:2,1:2] <- inverse(T[1:2,1:2])
 }
 
 ### END of model specification ###
@@ -611,25 +625,25 @@ TI[1:2,1:2] <- inverse(T[1:2,1:2])
 #Otherwise you can just fabricate some numbers. These are from Lee & Wagenmakers (2012).
 
 x <- matrix(c(.8,102, 1,98, .5,100, 0.9,105, .7,103, 
-          0.4,110, 1.2,99, 1.4,87, 0.6,113, 1.1,89, 1.3,93,
-          .8,102, 1,98, .5,100, 0.9,105, .7,103, 
-          0.4,110, 1.2,99, 1.4,87, 0.6,113, 1.1,89, 1.3,93),
-        nrow=22,ncol=2,byrow=T) 
+              0.4,110, 1.2,99, 1.4,87, 0.6,113, 1.1,89, 1.3,93,
+              .8,102, 1,98, .5,100, 0.9,105, .7,103, 
+              0.4,110, 1.2,99, 1.4,87, 0.6,113, 1.1,89, 1.3,93),
+            nrow=22,ncol=2,byrow=T) 
 
 n <- nrow(x) # number of people/units measured
 
 data <- list("x", "n") # to be passed on to WinBUGS
 myinits <-	list(
-list(r = 0, mu = c(0,0), lambda = c(1,1)))
+  list(r = 0, mu = c(0,0), lambda = c(1,1)))
 # parameters to be monitored:	
 parameters <- c("r", "mu", "sigma")
 
 # The following command calls WinBUGS with specific options.
 samples = bugs(data, inits=myinits, parameters,
-         model.file ="Correlation.txt",
-         n.chains=1, n.iter=5000, n.burnin=1, n.thin=1,
-         DIC=T, bugs.directory=bugsdir,
-         codaPkg=F, debug=F)
+               model.file ="Correlation.txt",
+               n.chains=1, n.iter=5000, n.burnin=1, n.thin=1,
+               DIC=T, bugs.directory=bugsdir,
+               codaPkg=F, debug=F)
 # Now the values for the monitored parameters are in the "samples" object, 
 # ready for inspection.
 
@@ -644,7 +658,7 @@ layout(matrix(c(1,2),1,2))
 layout.show(2)
 #some plotting options to make things look better:
 par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, mgp = c(3.5, 1, 0), cex.lab = 1.5,
-font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
+    font.lab = 2, cex.axis = 1.3, bty = "n", las=1)
 # data panel:    
 plot(x[,1],x[,2], type="p", pch=19, cex=1)
 # correlation panel:
