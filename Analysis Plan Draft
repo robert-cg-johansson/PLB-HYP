@@ -11,6 +11,8 @@ setwd("C:/ExcercisesforR/")
 library(R2WinBUGS) #for bugs
 library(polspline) #for logspline
 
+most analytic procedures specified below are discussed in detail by Lee & Wagenmakers in Bayesian Cognitive Modeling (2014)
+
 #########################################################################
 # I. Differential Pain Tolerance For Conventional and Embedded Hypnosis #
 #########################################################################
@@ -59,7 +61,6 @@ myinits <- list(
 parameters <- c("delta")
 
 # The following command calls WinBUGS with specific options.
-# For a detailed description see Sturtz, Ligges, & Gelman (2005).
 samples <- bugs(data, inits=myinits, parameters,
                 model.file="PLB-HYP-means.txt",
                 n.chains=3, n.iter=10000, n.burnin=1000, n.thin=1,
