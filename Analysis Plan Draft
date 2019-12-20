@@ -11,7 +11,7 @@ setwd("C:/ExcercisesforR/")
 library(R2WinBUGS) #for bugs
 library(polspline) #for logspline
 
-most analytic procedures specified below are discussed in detail by Lee & Wagenmakers in Bayesian Cognitive Modeling (2014)
+most analytic procedures specified below are discussed in detail by M. Lee & E.J. Wagenmakers in Bayesian Cognitive Modeling (2014)
 
 #########################################################################
 # I. Differential Pain Tolerance For Conventional and Embedded Hypnosis #
