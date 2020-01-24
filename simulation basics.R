@@ -213,7 +213,6 @@ H1_detection_rate
 H0_detection_rate = mean(results=="H0")
 H0_detection_rate
 
-
 ##############################
 ### PLB-HYP Power Analysis ###
 ##############################
@@ -279,7 +278,7 @@ iter = 100
 #Set parameters according to preference
 
 results = replicate(iter, simul(  n = 50,
-                                  mean_hyp = 142,
+                                  mean_hyp = 136,
                                   mean_plb = 100,
                                   mean_baseline = 70,
                                   sd = 70,
@@ -319,15 +318,15 @@ diff_hyp_plb <- exp_depth_hyp - exp_depth_plb
 }
 
 
-iter = 100
+iter = 200
 
 #Set Effect Size and N
 
-results = replicate(iter, simul(  n = 70,
+results = replicate(iter, simul(  n = 50,
                                   mean_hyp = 5,
                                   mean_plb = 5,
                               
-                                  sd = 2,
+                                  sd = 2.5,
                            
                                   SESOI = 1))
 
@@ -350,9 +349,9 @@ simul = function(
   sd,
   SESOI
 ){
-baseline_tolerance <- rnorm(n, mean=mean_hyp, sd=sd)
-hypnotic_tolerance <- rnorm(n, mean=mean_baseline, sd=sd)
-diff_hyp_base <- baseline_tolerance - hypnotic_tolerance
+baseline_pain <- rnorm(n, mean=mean_hyp, sd=sd)
+hypnotic_pain <- rnorm(n, mean=mean_baseline, sd=sd)
+diff_hyp_base <- hypnotic_pain - baseline_pain
   bf = ttestBF(x = diff_hyp_base)
   posterior = posterior(bf, iterations = 1000)
   HDI = hdi(posterior, ci = 0.9)[,"mu"]
@@ -372,12 +371,12 @@ iter = 100
 #Set Effect Size and N
 
 results = replicate(iter, simul(  n = 50,
-                                  mean_hyp = 6,
+                                  mean_hyp = 6.2,
                                   mean_baseline = 7,
                               
                                   sd = 1,
                            
-                                  SESOI = 1))
+                                  SESOI = 0.2))
 
 H1_detection_rate = mean(results=="H1")
 H1_detection_rate
