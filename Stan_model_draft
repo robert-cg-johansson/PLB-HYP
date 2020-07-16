@@ -279,8 +279,11 @@ data <-                simul(  n = 50,
                                   decision_criterion = "BF_lmBF" # either "CI_lme4", "AIC_lme4", "BF_lme4", "HDI_lmBF", "BF_lmBF"
 )
 
-#a tad brute force trickery is needed to make the dataset ready for ulam
+###################
+### Stan models ###
+###################
 
+#a tad brute force trickery is needed to make the dataset ready for ulam
 
 data_hyp <- data[ which(data$condition_hyp==1 ), ]
 data_plb <- data[ which(data$condition_hyp==0 ), ]
@@ -316,16 +319,12 @@ varnames_plb_hyp_data = c(
 
 names(plb_hyp_data) = varnames_plb_hyp_data
 
-#contrast analgesia magnitude of hypnosis and placebo and make this a variable
-tolerance_diff <- (data_hyp$outcome_hyp - data_hyp$outcome_baseline) - (data_plb$outcome_plb - data_plb$outcome_baseline)
 
-plb_hyp_data$tolerance_diff <- tolerance_diff
+#now we specify our hypnosis model
 
-#now we specify our model
-
-plb_hyp_m1 <- ulam(
+hyp_m1 <- ulam(
   alist(
-    tolerance_diff ~ dnorm( mu, sigma ),
+    tolerance_hyp ~ dnorm( mu, sigma ),
     mu <- b0 + b1 * age + b2 * female + b3 * height + b4 * FPQ_total,
     b0 ~ dnorm(4, 1e4),
     b1 ~ dnorm(0, 1e4),
@@ -337,11 +336,50 @@ plb_hyp_m1 <- ulam(
   data=plb_hyp_data,
   constraints = list(sigma = "lower=0"),
   chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
-print("Analgesia difference, Stan estimates")
+
+#inspect results
+print("Pain Tolerance (Hypnosis), Stan estimates")
 precis(plb_hyp_m1, prob=0.95,corr=TRUE)
 
-parameters <- precis(plb_hyp_m1, prob=0.95,corr=TRUE)
+#extract HDI
+parameters <- precis(hyp_m1, prob=0.95,corr=TRUE)
+HDI_low <- parameters$`2.5%`[1]
+decision = if(HDI_low < SESOI){"H0"} else if (HDI_low > 0){"H1"} else {"inconclusive"} 
+
+#
+
+
+#now we specify our placebo model
+
+plb_m1 <- ulam(
+  alist(
+    tolerance_plb ~ dnorm( mu, sigma ),
+    mu <- b0 + b1 * age + b2 * female + b3 * height + b4 * FPQ_total,
+    b0 ~ dnorm(4, 1e4),
+    b1 ~ dnorm(0, 1e4),
+    b2 ~ dnorm(0, 1e4),
+    b3 ~ dnorm(0, 1e4),
+    b4 ~ dnorm(0, 1e4),
+    sigma ~ dcauchy(0,1e4)
+  ) ,
+  data=plb_hyp_data,
+  constraints = list(sigma = "lower=0"),
+  chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
+
+#inspect results
+print("Pain tolerance (Placebo), Stan estimates")
+precis(plb_hyp_m1, prob=0.95,corr=TRUE)
+
+#extract HDI
+parameters <- precis(plb_m1, prob=0.95,corr=TRUE)
 HDI_low <- parameters$`2.5%`[1]
 decision = if(HDI_low < SESOI){"H0"} else if (HDI_low > 0){"H1"} else {"inconclusive"} 
 
 
+
+##Possibly a difference scores analysis
+
+#contrast analgesia magnitude of hypnosis and placebo and make this a variable
+tolerance_diff <- (data_hyp$outcome_hyp - data_hyp$outcome_baseline) - (data_plb$outcome_plb - data_plb$outcome_baseline)
+
+plb_hyp_data$tolerance_diff <- tolerance_diff
