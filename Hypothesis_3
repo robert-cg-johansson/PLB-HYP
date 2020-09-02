@@ -228,6 +228,7 @@ simul = function(
   
   
   #m3
+  
   plb_hyp_data$analgesia_diff <- (plb_hyp_data$analgesia_expectancy_hyp - plb_hyp_data$analgesia_expectancy_plb)
   
   analg_m1 <- ulam(
@@ -259,9 +260,9 @@ simul = function(
 
 
 
+iter=2
 
-
-results <-                simul(  n = 50,
+results = replicate(iter, simul(  n = 50,
                                   mean_hyp = 136,
                                   mean_plb = 100,
                                   mean_baseline = 70,
@@ -284,7 +285,7 @@ results <-                simul(  n = 50,
                                   mean_hypnotic_depth_hyp = 5,
                                   mean_hypnotic_depth_plb = 5,
                                   sd_hypnotizability = 2,
-                                  mean_hypnotizability = 6)
+                                  mean_hypnotizability = 6))
 
 
 
