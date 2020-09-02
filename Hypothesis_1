@@ -1,6 +1,6 @@
 ############################
-### PLB-HYP Hypothesis 3 ###
-###########################
+### PLB-HYP Hypothesis 1 ###
+############################
 
 graphics.off()
 rm(list=ls(all=TRUE))
@@ -226,55 +226,24 @@ simul = function(
   
   names(plb_hyp_data) = varnames_plb_hyp_data
   
+  plb_hyp_data$tolerance_diff = plb_hyp_data$tolerance_hyp - plb_hyp_data$tolerance_plb
   
-  
-  hyp_m1 <- ulam(
+  tolerance.m1 <- ulam(
     alist(
-      tolerance_hyp ~ dnorm( mu, sigma ),
-      mu <- b0 + b1 * age + b2 * female + b3 * height + b4 * FPQ_total + b5 * expected_CPT_pain_hyp + b6 * expected_pain_reduction_hyp,
-      b0 ~ dnorm(4, 1e4),
+      tolerance_diff ~ dnorm(mu, sigma),
+      mu <- b0,
+      b0 ~ dnorm(0, 1e4),
       b1 ~ dnorm(0, 1e4),
-      b2 ~ dnorm(0, 1e4),
-      b3 ~ dnorm(0, 1e4),
-      b4 ~ dnorm(0, 1e4),
-      b5 ~ dnorm(0, 1e4),
-      b6 ~ dnorm(0, 1e4),
-      sigma ~ dcauchy(0,1e4)
-    ) ,
-    data=data_hyp,
+      sigma ~ dcauchy(0, 1e4) 
+    ),
+    data=plb_hyp_data,
     constraints = list(sigma = "lower=0"),
     chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
-  
-  print("Pain Tolerance (Hypnosis), Stan estimates")
-  precis(hyp_m1, prob=0.95,corr=TRUE)
-  
-  
-  plb_m1 <- ulam(
-    alist(
-      tolerance_plb ~ dnorm( mu, sigma ),
-      mu <- b0 + b1 * age + b2 * female + b3 * height + b4 * FPQ_total + b5 * expected_CPT_pain_plb + b6 * expected_pain_reduction_plb,
-      b0 ~ dnorm(4, 1e4),
-      b1 ~ dnorm(0, 1e4),
-      b2 ~ dnorm(0, 1e4),
-      b3 ~ dnorm(0, 1e4),
-      b4 ~ dnorm(0, 1e4),
-      b5 ~ dnorm(0, 1e4),
-      b6 ~ dnorm(0, 1e4),
-      sigma ~ dcauchy(0,1e4)
-    ) ,
-    data=data_plb,
-    constraints = list(sigma = "lower=0"),
-    chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
-  
-  print("Pain Tolerance (Embedded), Stan estimates")
-  precis(plb_m1, prob=0.95,corr=TRUE)
-  
-  
   
   #decision
-  parameters <- precis(hyp_m1, prob=0.95,corr=TRUE)
+  parameters <- precis(tolerance.m1, prob=0.95,corr=TRUE)
   HDI_low <- parameters$`2.5%`[1]
-  ROPE =
+  ROPE = 15
   decision = if(HDI_low < ROPE){"H0"} else if (HDI_low > 0){"H1"} else {"inconclusive"} 
   
   return(decision)
@@ -290,8 +259,9 @@ simul = function(
 
 # H1 is simulated to be true
 
+iter=1
 
-results <-                simul(  n = 50,
+results = replicate(iter, simul(  n = 50,
                                   mean_hyp = 136,
                                   mean_plb = 100,
                                   mean_baseline = 70,
@@ -314,7 +284,7 @@ results <-                simul(  n = 50,
                                   mean_hypnotic_depth_hyp = 5,
                                   mean_hypnotic_depth_plb = 5,
                                   sd_hypnotizability = 2,
-                                  mean_hypnotizability = 6)
+                                  mean_hypnotizability = 6))
 
 
 
