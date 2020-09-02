@@ -1,0 +1,292 @@
+############################
+### PLB-HYP Hypothesis 3 ###
+###########################
+
+graphics.off()
+rm(list=ls(all=TRUE))
+
+# based on guide: 
+# https://easystats.github.io/bayestestR/articles/bayes_factors.html
+
+
+
+library(MASS)
+library(tidyverse)
+library(BayesFactor)
+library(HDInterval)
+library(pkgcond)
+library(bayestestR)
+library(lme4)
+library(cAIC4)
+library(rethinking)
+
+# also remember to detect cores and leave 1 core available for other processes
+nCores = parallel::detectCores() 
+chains <- nCores <- nCores-1
+
+# predictors of pain
+# age + female + height + expected_CPT_pain + FPQ_total
+
+# potential moderators of the effect
+# expectancy_hypnoanalgesia + EHS_total + motivation_to_experience_hypnosis
+
+
+simulate_data_with_moderators = function(
+  n,
+  mean_hyp,
+  mean_plb,
+  mean_baseline,
+  sd_outcome,
+  sd_age,
+  mean_age,
+  sd_height,
+  mean_height,
+  sd_expected_CPT_pain,
+  mean_expected_CPT_pain,
+  sd_FPQ_total,
+  mean_FPQ_total,
+  sd_expectancy_pain_reduction,
+  mean_expectancy_pain_reduction_hyp,
+  mean_expectancy_pain_reduction_plb,
+  sd_expectancy_hypnotic_depth,
+  mean_expectancy_hypnotic_depth_hyp,
+  mean_expectancy_hypnotic_depth_plb,
+  sd_hypnotic_depth,
+  mean_hypnotic_depth_hyp,
+  mean_hypnotic_depth_plb,
+  sd_hypnotizability,
+  mean_hypnotizability
+){
+  varnames_sim_pre = c(
+    "outcome_baseline", "outcome_hyp", "outcome_plb", "age", "female", "height", "expected_CPT_pain", "FPQ_total", "expectancy_pain_reduction_hyp", "expectancy_pain_reduction_plb", "expectancy_hypnotic_depth_hyp", "expectancy_hypnotic_depth_plb", "hypnotic_depth_hyp", "hypnotic_depth_plb", "hypnotizability"
+  )
+  
+  data_sim_pre = as.data.frame(
+    mvrnorm(n = n,
+            mu = rep(0, length(varnames_sim_pre)),
+            Sigma = matrix(c(1,0.5,0.5,-0.2,-0.2,-0.2,0.2,0.2,0,0,0,0,0,0,0,
+                             0.5,1,0.7,-0.2,-0.2,-0.2,-0.2,-0.2,0.5,0.3,0.4,0.2,0.5,0.3,0.4,
+                             0.5,0.7,1,-0.2,-0.2,-0.2,-0.2,-0.2,0.3,0.5,0.2,0.4,0.3,0.5,0.4,
+                             -0.2,-0.2,-0.2,1,0,0,0,0,0,0,0,0,0,0,0,
+                             -0.2,-0.2,-0.2,0,1,-0.2,0,0,0,0,0,0,0,0,0,
+                             -0.2,-0.2,-0.2,0,-0.2,1,0,0,0,0,0,0,0,0,0,
+                             0.2,-0.2,-0.2,0,0,0,1,0,0,0,0,0,0,0,0,
+                             0.2,-0.2,-0.2,0,0,0,0,1,0,0,0,0,0,0,0,
+                             0,0.5,0.3,0,0,0,0,0,1,0.6,0.5,0.4,0.3,0.3,0.4,
+                             0,0.3,0.5,0,0,0,0,0,0.6,1,0.4,0.5,0.3,0.3,0.4,
+                             0,0.4,0.2,0,0,0,0,0,0.5,0.4,1,0.6,0.4,0.3,0.4,
+                             0,0.2,0.4,0,0,0,0,0,0.4,0.5,0.6,1,0.3,0.4,0.4,
+                             0,0.5,0.3,0,0,0,0,0,0.3,0.3,0.4,0.3,1,0.6,0.6,
+                             0,0.3,0.5,0,0,0,0,0,0.3,0.3,0.3,0.4,0.6,1,0.6,
+                             0,0.4,0.4,0,0,0,0,0,0.4,0.4,0.4,0.4,0.6,0.6,1
+                             
+            ), nrow = length(varnames_sim_pre)))
+  )
+  
+  names(data_sim_pre) = varnames_sim_pre
+  
+  data_pre = as.data.frame(matrix(NA, nrow = n, ncol = length(varnames_sim_pre)+1))
+  names(data_pre) = c("ID", varnames_sim_pre)
+  
+  data_pre[,"outcome_baseline"] = data_sim_pre[,"outcome_baseline"]*sd_outcome+mean_baseline
+  data_pre[,"outcome_hyp"] = data_sim_pre[,"outcome_hyp"]*sd_outcome+mean_hyp
+  data_pre[,"outcome_plb"] = data_sim_pre[,"outcome_plb"]*sd_outcome+mean_plb
+  data_pre[,"age"] = data_sim_pre[,"age"]*sd_age+mean_age
+  data_pre[data_sim_pre[,"female"] < 0,"female"] = 0
+  data_pre[data_sim_pre[,"female"] > -0.00000000001,"female"] = 1
+  data_pre[,"height"] = data_sim_pre[,"height"]*sd_height+mean_height
+  data_pre[,"expected_CPT_pain"] = data_sim_pre[,"expected_CPT_pain"]*sd_expected_CPT_pain+mean_expected_CPT_pain
+  data_pre[,"FPQ_total"] = data_sim_pre[,"FPQ_total"]*sd_FPQ_total+mean_FPQ_total
+  data_pre[,"ID"] = 1:n
+  data_pre[,"expectancy_pain_reduction_hyp"] = data_sim_pre[,"expectancy_pain_reduction_hyp"]*sd_expectancy_pain_reduction+mean_expectancy_pain_reduction_hyp
+  data_pre[,"expectancy_pain_reduction_plb"] = data_sim_pre[,"expectancy_pain_reduction_plb"]*sd_expectancy_pain_reduction+mean_expectancy_pain_reduction_plb
+  data_pre[,"expectancy_hypnotic_depth_hyp"] = data_sim_pre[,"expectancy_hypnotic_depth_hyp"]*sd_expectancy_hypnotic_depth+mean_expectancy_hypnotic_depth_hyp
+  data_pre[,"expectancy_hypnotic_depth_plb"] = data_sim_pre[,"expectancy_hypnotic_depth_plb"]*sd_expectancy_hypnotic_depth+mean_expectancy_hypnotic_depth_plb
+  data_pre[,"hypnotic_depth_hyp"] = data_sim_pre[,"hypnotic_depth_hyp"]*sd_hypnotic_depth+mean_hypnotic_depth_hyp
+  data_pre[,"hypnotic_depth_plb"] = data_sim_pre[,"hypnotic_depth_plb"]*sd_hypnotic_depth+mean_hypnotic_depth_plb
+  data_pre[,"hypnotizability"] = data_sim_pre[,"hypnotizability"]*sd_hypnotizability+mean_hypnotizability
+  
+  
+  data = data_pre %>% 
+    gather(key = "condition", value = "outcome", outcome_hyp:outcome_plb) %>%
+    gather(key = "condition_exp_painred", value = "expectancy_pain_reduction", expectancy_pain_reduction_hyp:expectancy_pain_reduction_plb) %>%
+    filter(substring(condition, 9, 11) == substring(condition_exp_painred, 27, 29)) %>% 
+    gather(key = "condition_exp_hypdepth", value = "expectancy_hypnotic_depth", expectancy_hypnotic_depth_hyp:expectancy_hypnotic_depth_plb) %>%
+    filter(substring(condition, 9, 11) == substring(condition_exp_hypdepth, 27, 29)) %>%
+    gather(key = "condition_hypdepth", value = "hypnotic_depth", hypnotic_depth_hyp:hypnotic_depth_plb) %>%
+    filter(substring(condition, 9, 11) == substring(condition_hypdepth, 16, 18)) %>%
+    arrange(ID)
+  
+  
+  
+  
+  data = data %>% 
+    mutate(condition = as.factor(condition),
+           ID = as.factor(ID),
+           condition_hyp = recode(condition,
+                                  "outcome_hyp" = 1,
+                                  "outcome_plb" = 0))
+  return(data)
+}
+
+
+
+
+
+
+simul = function(
+  n,
+  mean_hyp,
+  mean_plb,
+  mean_baseline,
+  sd_outcome,
+  sd_age,
+  mean_age,
+  sd_height,
+  mean_height,
+  sd_expected_CPT_pain,
+  mean_expected_CPT_pain,
+  sd_FPQ_total,
+  mean_FPQ_total,
+  sd_expectancy_pain_reduction,
+  mean_expectancy_pain_reduction_hyp,
+  mean_expectancy_pain_reduction_plb,
+  sd_expectancy_hypnotic_depth,
+  mean_expectancy_hypnotic_depth_hyp,
+  mean_expectancy_hypnotic_depth_plb,
+  sd_hypnotic_depth,
+  mean_hypnotic_depth_hyp,
+  mean_hypnotic_depth_plb,
+  sd_hypnotizability,
+  mean_hypnotizability
+){
+  
+  data = simulate_data_with_moderators(
+    n = n,
+    mean_hyp = mean_hyp,
+    mean_plb = mean_plb,
+    mean_baseline = mean_baseline,
+    sd_outcome = sd_outcome,
+    sd_age = sd_age,
+    mean_age = mean_age,
+    sd_height = sd_height,
+    mean_height = mean_height,
+    sd_expected_CPT_pain = sd_expected_CPT_pain,
+    mean_expected_CPT_pain = mean_expected_CPT_pain,
+    sd_FPQ_total = sd_FPQ_total,
+    mean_FPQ_total = mean_FPQ_total,
+    sd_expectancy_pain_reduction = sd_expectancy_pain_reduction,
+    mean_expectancy_pain_reduction_hyp = mean_expectancy_pain_reduction_hyp,
+    mean_expectancy_pain_reduction_plb = mean_expectancy_pain_reduction_plb,
+    sd_expectancy_hypnotic_depth = sd_expectancy_hypnotic_depth,
+    mean_expectancy_hypnotic_depth_hyp = mean_expectancy_hypnotic_depth_hyp,
+    mean_expectancy_hypnotic_depth_plb = mean_expectancy_hypnotic_depth_plb,
+    sd_hypnotic_depth = sd_hypnotic_depth,
+    mean_hypnotic_depth_hyp = mean_hypnotic_depth_hyp,
+    mean_hypnotic_depth_plb = mean_hypnotic_depth_plb,
+    sd_hypnotizability = sd_hypnotizability,
+    mean_hypnotizability = mean_hypnotizability
+  )
+  
+  
+  
+  
+  
+  data_hyp <- data[ which(data$condition_hyp==1 ), ]
+  data_plb <- data[ which(data$condition_hyp==0 ), ]
+  
+  names(data_hyp)[6] <- "expected_CPT_pain_hyp"
+  names(data_hyp)[10] <- "outcome_hyp"
+  names(data_hyp)[12] <- "expected_pain_reduction_hyp"
+  names(data_hyp)[14] <- "expected_depth_hyp"
+  names(data_hyp)[16] <- "depth_hyp"
+  
+  names(data_plb)[6] <- "expected_CPT_pain_plb"
+  names(data_plb)[10] <- "outcome_plb"
+  names(data_plb)[12] <- "expected_pain_reduction_plb"
+  names(data_plb)[14] <- "expected_depth_plb"
+  names(data_plb)[16] <- "depth_plb"
+  
+  plb_hyp_data <- cbind(data_hyp$ID, data_hyp$age, data_hyp$female, data_hyp$height,             #demographics
+                        data_hyp$outcome_baseline, data_hyp$hypnotizability, data_hyp$FPQ_total, #baseline and hypnotizability
+                        data_hyp$expected_CPT_pain_hyp,data_hyp$expected_pain_reduction_hyp, data_hyp$expected_depth_hyp, 
+                        data_hyp$depth_hyp, data_hyp$outcome_hyp,                                #hypnosis condition
+                        data_plb$expected_CPT_pain_plb, data_plb$expected_pain_reduction_plb, data_plb$expected_depth_plb, 
+                        data_plb$depth_plb, data_plb$outcome_plb)                                #placebo condition
+  
+  plb_hyp_data <- as.data.frame(plb_hyp_data)
+  
+  varnames_plb_hyp_data = c(
+    "ID", "age", "female", "height", "baseline_tolerance", "hypnotizability", "FPQ_total", 
+    "pain_expectancy_hyp", "analgesia_expectancy_hyp", "depth_expectancy_hyp", 
+    "depth_hyp", "tolerance_hyp",
+    "pain_expectancy_plb", "analgesia_expectancy_plb", "depth_expectancy_plb", 
+    "depth_plb", "tolerance_plb"
+  )
+  
+  names(plb_hyp_data) = varnames_plb_hyp_data
+  
+  plb_hyp_data$analgesia_diff <- (data_hyp$depth_hyp - data_plb$depth_plb)
+  
+  depth_m1 <- ulam(
+    alist(
+      depthdiff ~ dnorm(mu, sigma),
+      mu ~ dnorm(0, 1e4),
+      sigma ~ dcauchy(0, 1e4)
+    ),
+    data=plb_hyp_data,
+    constraints = list(sigma = "lower=0"),
+    chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
+  
+  print("Depth difference (hyp - plb), Stan estimates")
+  parameters <- precis(depth_m1, prob=0.95,corr=TRUE)
+  
+  HDI_low <- precis(depth_plb, prob=0.95,corr=TRUE)$`2.5%`[1] 
+  ROPE = -1
+  decision = if(HDI_low < ROPE){"H1"} else if (HDI_low > 0){"H0"} else {"inconclusive"} 
+  
+  return(decision)
+  
+  
+}
+
+
+
+
+
+results <-                simul(  n = 50,
+                                  mean_hyp = 136,
+                                  mean_plb = 100,
+                                  mean_baseline = 70,
+                                  sd_outcome = 70,
+                                  sd_age = 3,
+                                  mean_age = 24,
+                                  sd_height = 10,
+                                  mean_height = 178,
+                                  sd_expected_CPT_pain = 2,
+                                  mean_expected_CPT_pain = 4,
+                                  sd_FPQ_total = 1,
+                                  mean_FPQ_total = 2,
+                                  sd_expectancy_pain_reduction = 2,
+                                  mean_expectancy_pain_reduction_hyp = 5,
+                                  mean_expectancy_pain_reduction_plb = 5,
+                                  sd_expectancy_hypnotic_depth = 2,
+                                  mean_expectancy_hypnotic_depth_hyp = 5,
+                                  mean_expectancy_hypnotic_depth_plb = 5,
+                                  sd_hypnotic_depth = 2,
+                                  mean_hypnotic_depth_hyp = 5,
+                                  mean_hypnotic_depth_plb = 5,
+                                  sd_hypnotizability = 2,
+                                  mean_hypnotizability = 6)
+
+
+
+
+H1_detection_rate = mean(results=="H1")
+H0_detection_rate = mean(results=="H0")
+Inconclusive_rate = mean(results=="inconclusive")
+
+H1_detection_rate
+H0_detection_rate
+Inconclusive_rate
+
