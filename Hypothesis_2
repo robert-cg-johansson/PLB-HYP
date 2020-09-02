@@ -1,5 +1,5 @@
-############################
-### PLB-HYP Hypothesis 3 ###
+###########################
+### PLB-HYP Hypothesis 2 ##
 ###########################
 
 graphics.off()
@@ -266,16 +266,12 @@ simul = function(
   
   decision = if(HDI_low < ROPE){"H1"} else if (HDI_low > 0){"H0"} else {"inconclusive"} 
   
+  return(decision)
 
 }
 
 
 
-################
-# Hypothesis I #
-################
-
-# H1 is simulated to be true
 
 
 results <-                simul(  n = 50,
