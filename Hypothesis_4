@@ -1,6 +1,6 @@
 ############################
-### PLB-HYP Hypothesis 3 ###
-###########################
+### PLB-HYP Hypothesis 4 ###
+############################
 
 graphics.off()
 rm(list=ls(all=TRUE))
