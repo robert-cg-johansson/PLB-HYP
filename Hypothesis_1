@@ -1,4 +1,3 @@
-
 ############################
 ### PLB-HYP Hypothesis 3 ###
 ###########################
@@ -278,6 +277,7 @@ simul = function(
   ROPE =
   decision = if(HDI_low < ROPE){"H0"} else if (HDI_low > 0){"H1"} else {"inconclusive"} 
   
+  return(decision)
   
   
 }
