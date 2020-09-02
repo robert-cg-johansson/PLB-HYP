@@ -226,8 +226,8 @@ simul = function(
   
   names(plb_hyp_data) = varnames_plb_hyp_data
   
-  plb_hyp_data$analgesia_diff <- (data_hyp$depth_hyp - data_plb$depth_plb)
-  
+plb_hyp_data$depthdiff = plb_hyp_data$depth_expectancy_plb + plb_hyp_data$depth_expectancy_hyp
+
   depth_m1 <- ulam(
     alist(
       depthdiff ~ dnorm(mu, sigma),
@@ -241,7 +241,7 @@ simul = function(
   print("Depth difference (hyp - plb), Stan estimates")
   parameters <- precis(depth_m1, prob=0.95,corr=TRUE)
   
-  HDI_low <- precis(depth_plb, prob=0.95,corr=TRUE)$`2.5%`[1] 
+  HDI_low <- precis(depth_m1, prob=0.95,corr=TRUE)$`2.5%`[1] 
   ROPE = -1
   decision = if(HDI_low < ROPE){"H1"} else if (HDI_low > 0){"H0"} else {"inconclusive"} 
   
@@ -253,8 +253,9 @@ simul = function(
 
 
 
+iter=1
 
-results <-                simul(  n = 50,
+results = replicate(iter, simul(  n = 50,
                                   mean_hyp = 136,
                                   mean_plb = 100,
                                   mean_baseline = 70,
@@ -277,7 +278,7 @@ results <-                simul(  n = 50,
                                   mean_hypnotic_depth_hyp = 5,
                                   mean_hypnotic_depth_plb = 5,
                                   sd_hypnotizability = 2,
-                                  mean_hypnotizability = 6)
+                                  mean_hypnotizability = 6))
 
 
 
