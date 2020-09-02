@@ -1,6 +1,6 @@
-###########################
-### PLB-HYP Hypothesis 2 ##
-###########################
+############################
+### PLB-HYP Hypothesis 2 ###
+############################
 
 graphics.off()
 rm(list=ls(all=TRUE))
@@ -273,8 +273,9 @@ simul = function(
 
 
 
+iter=1
 
-results <-                simul(  n = 50,
+results = replicate(iter, simul(  n = 50,
                                   mean_hyp = 136,
                                   mean_plb = 100,
                                   mean_baseline = 70,
@@ -297,7 +298,7 @@ results <-                simul(  n = 50,
                                   mean_hypnotic_depth_hyp = 5,
                                   mean_hypnotic_depth_plb = 5,
                                   sd_hypnotizability = 2,
-                                  mean_hypnotizability = 6)
+                                  mean_hypnotizability = 6))
 
 
 
