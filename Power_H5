@@ -1,35 +1,21 @@
-
 ############################
 ### PLB-HYP Hypothesis 1 ###
 ############################
 
+# set up workspace
+
 graphics.off()
 rm(list=ls(all=TRUE))
 
-# based on guide: 
-# https://easystats.github.io/bayestestR/articles/bayes_factors.html
-
-
-
 library(MASS)
 library(tidyverse)
-library(BayesFactor)
-library(HDInterval)
-library(pkgcond)
-library(bayestestR)
-library(lme4)
-library(cAIC4)
 library(rethinking)
+library(parallel)
+library(rstan)
 
 # also remember to detect cores and leave 1 core available for other processes
 nCores = parallel::detectCores() 
 chains <- nCores <- nCores-1
-
-# predictors of pain
-# age + female + height + expected_CPT_pain + FPQ_total
-
-# potential moderators of the effect
-# expectancy_hypnoanalgesia + EHS_total + motivation_to_experience_hypnosis
 
 
 simulate_data_with_moderators = function(
@@ -227,14 +213,13 @@ simul = function(
   
   names(plb_hyp_data) = varnames_plb_hyp_data
   
-  plb_hyp_data$hypnoanalgesia = plb_hyp_data$tolerance_hyp - plb_hyp_data$baseline_tolerance
+  plb_hyp_data$hypnoanalgesia = plb_hyp_data$baseline_tolerance - plb_hyp_data$tolerance_hyp
   
   manipulation_check.m1 <- ulam(
     alist(
       hypnoanalgesia ~ dnorm(mu, sigma),
       mu <- b0,
       b0 ~ dnorm(0, 1e4),
-      b1 ~ dnorm(0, 1e4),
       sigma ~ dcauchy(0, 1e4) 
     ),
     data=plb_hyp_data,
@@ -244,8 +229,9 @@ simul = function(
   #decision
   parameters <- precis(manipulation_check.m1, prob=0.95,corr=TRUE)
   HDI_low <- parameters$`2.5%`[1]
-  ROPE = 15
-  decision = if(HDI_low < ROPE){"H0"} else if (HDI_low > 0){"H1"} else {"inconclusive"} 
+  HDI_high <- parameters$`97.5%`[1]
+  ROPE = -15                        # ROPE based on Baker & Kirsch (1993) and Liu et al. (2003)
+  decision = if(ROPE < HDI_low){"H0"} else if (ROPE > HDI_high){"H1"} else {"inconclusive"} 
   
   return(decision)
   
@@ -254,11 +240,8 @@ simul = function(
 
 
 
-################
-# Hypothesis I #
-################
 
-# H1 is simulated to be true
+# hypothesis 5 is simulated to be true
 
 iter=1
 
