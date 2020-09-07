@@ -2,33 +2,21 @@
 ### PLB-HYP Hypothesis 4 ###
 ############################
 
+# set up workspace
+
 graphics.off()
 rm(list=ls(all=TRUE))
 
-# based on guide: 
-# https://easystats.github.io/bayestestR/articles/bayes_factors.html
-
-
-
 library(MASS)
 library(tidyverse)
-library(BayesFactor)
-library(HDInterval)
-library(pkgcond)
-library(bayestestR)
-library(lme4)
-library(cAIC4)
 library(rethinking)
+library(parallel)
+library(rstan)
 
 # also remember to detect cores and leave 1 core available for other processes
 nCores = parallel::detectCores() 
 chains <- nCores <- nCores-1
 
-# predictors of pain
-# age + female + height + expected_CPT_pain + FPQ_total
-
-# potential moderators of the effect
-# expectancy_hypnoanalgesia + EHS_total + motivation_to_experience_hypnosis
 
 
 simulate_data_with_moderators = function(
@@ -226,24 +214,26 @@ simul = function(
   
   names(plb_hyp_data) = varnames_plb_hyp_data
   
-plb_hyp_data$depthdiff = plb_hyp_data$depth_expectancy_plb + plb_hyp_data$depth_expectancy_hyp
+plb_hyp_data$depth_exp_diff = plb_hyp_data$depth_expectancy_plb - plb_hyp_data$depth_expectancy_hyp
 
-  depth_m1 <- ulam(
+  depth_exp.m1 <- ulam(
     alist(
-      depthdiff ~ dnorm(mu, sigma),
-      mu ~ dnorm(0, 1e4),
-      sigma ~ dcauchy(0, 1e4)
+      depth_exp_diff ~ dnorm(mu, sigma),
+      mu ~ dnorm(0, 1e4),            #b0 prior based on Kekecs et al. (2018)   
+      sigma ~ dcauchy(2.5, 1e4)      #sigma prior based on Kekecs et al. (2018)
     ),
     data=plb_hyp_data,
     constraints = list(sigma = "lower=0"),
     chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
   
-  print("Depth difference (hyp - plb), Stan estimates")
-  parameters <- precis(depth_m1, prob=0.95,corr=TRUE)
+  #decision
+  ROPE <- -1
+  parameters <- precis(depth_exp.m1, prob=0.95,corr=TRUE)
+  HDI_low <- parameters$`2.5%`[1]
+  HDI_high <- parameters$`97.5%`[1]
   
-  HDI_low <- precis(depth_m1, prob=0.95,corr=TRUE)$`2.5%`[1] 
-  ROPE = -1
-  decision = if(HDI_low < ROPE){"H1"} else if (HDI_low > 0){"H0"} else {"inconclusive"} 
+  
+  decision = if(ROPE < HDI_low){"H0"} else if (ROPE > HDI_high){"H1"} else {"inconclusive"} 
   
   return(decision)
   
@@ -251,7 +241,7 @@ plb_hyp_data$depthdiff = plb_hyp_data$depth_expectancy_plb + plb_hyp_data$depth_
 }
 
 
-
+# hypothesis 4 is simulated to be false
 
 iter=1
 
