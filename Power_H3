@@ -2,33 +2,20 @@
 ### PLB-HYP Hypothesis 3 ##
 ###########################
 
+# set up workspace
+
 graphics.off()
 rm(list=ls(all=TRUE))
 
-# based on guide: 
-# https://easystats.github.io/bayestestR/articles/bayes_factors.html
-
-
-
 library(MASS)
 library(tidyverse)
-library(BayesFactor)
-library(HDInterval)
-library(pkgcond)
-library(bayestestR)
-library(lme4)
-library(cAIC4)
 library(rethinking)
+library(parallel)
+library(rstan)
 
 # also remember to detect cores and leave 1 core available for other processes
 nCores = parallel::detectCores() 
 chains <- nCores <- nCores-1
-
-# predictors of pain
-# age + female + height + expected_CPT_pain + FPQ_total
-
-# potential moderators of the effect
-# expectancy_hypnoanalgesia + EHS_total + motivation_to_experience_hypnosis
 
 
 simulate_data_with_moderators = function(
@@ -229,36 +216,34 @@ simul = function(
   
   #m3
   
-  plb_hyp_data$analgesia_diff <- (plb_hyp_data$analgesia_expectancy_hyp - plb_hyp_data$analgesia_expectancy_plb)
+  plb_hyp_data$analgesia_exp_diff <- (plb_hyp_data$analgesia_expectancy_plb - plb_hyp_data$analgesia_expectancy_hyp)
   
-  analg_m1 <- ulam(
+  analg_exp.m1 <- ulam(
     alist(
-      analgesia_diff ~ dnorm(mu, sigma),
-      mu ~ dnorm(0, 1e4),
-      sigma ~ dcauchy(0, 1e4)
+      analgesia_exp_diff ~ dnorm(mu, sigma),
+      mu ~ dnorm(0, 1e4),          #b0 prior based on Kekecs et al. (2018
+      sigma ~ dcauchy(0, 1e4)      #sigma prior based on Kekecs et al. (2018)
     ),
     data=plb_hyp_data,
     constraints = list(sigma = "lower=0"),
     chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
   
-  print("Expected analgesia difference (hyp - plb), Stan estimates")
-  precis(analg_m1, prob=0.95,corr=TRUE)
+  #decision
+  ROPE <- -1
+  parameters <- precis(analg_exp.m1, prob=0.95,corr=TRUE)
+  HDI_low <- parameters$`2.5%`[1]
+  HDI_high <- parameters$`97.5%`[1]
   
   
-  ROPE=1
-  
-  mu_hyp <- precis(analg_m1, prob=0.95)[1,1]
-  
-  decision = if(ROPE < mu_hyp){"H1"} else if (ROPE > mu_hyp){"H0"} else {"inconclusive"} 
-  
-  
+  decision = if(ROPE < HDI_low){"H0"} else if (ROPE > HDI_high){"H1"} else {"inconclusive"} 
   
   return(decision)
+  
   
 }
 
 
-
+# hypothesis 3 is simulated to be false
 
 iter=2
 
