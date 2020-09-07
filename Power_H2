@@ -2,33 +2,21 @@
 ### PLB-HYP Hypothesis 2 ###
 ############################
 
+# set up workspace
+
 graphics.off()
 rm(list=ls(all=TRUE))
 
-# based on guide: 
-# https://easystats.github.io/bayestestR/articles/bayes_factors.html
-
-
-
 library(MASS)
 library(tidyverse)
-library(BayesFactor)
-library(HDInterval)
-library(pkgcond)
-library(bayestestR)
-library(lme4)
-library(cAIC4)
 library(rethinking)
+library(parallel)
+library(rstan)
 
 # also remember to detect cores and leave 1 core available for other processes
 nCores = parallel::detectCores() 
 chains <- nCores <- nCores-1
 
-# predictors of pain
-# age + female + height + expected_CPT_pain + FPQ_total
-
-# potential moderators of the effect
-# expectancy_hypnoanalgesia + EHS_total + motivation_to_experience_hypnosis
 
 
 simulate_data_with_moderators = function(
@@ -227,51 +215,35 @@ simul = function(
   names(plb_hyp_data) = varnames_plb_hyp_data
   
   
-  depth_plb <- ulam(
+  plb_hyp_data$depth_diff <- plb_hyp_data$depth_plb - plb_hyp_data$depth_hyp
+  
+  #specify model
+  
+  depth.m1 <- ulam(
     alist(
-      depth_plb ~ dnorm(mu, sigma),
-      mu <- b0 + b1 * expected_depth_plb,
+      depth_diff ~ dnorm(mu, sigma),
+      mu <- b0,
       b0 ~ dnorm(0, 1e4),
-      b1 ~ dnorm(0, 1e4),
       sigma ~ dcauchy(2.6, 1e4) #2.6 sigma prior from Kekecs et al. (2018)
     ),
-    data=data_plb,
+    data=plb_hyp_data,
     constraints = list(sigma = "lower=0"),
     chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
-  
-  print("Hypnotic Depth (Embedded), Stan estimates")
-  precis(depth_plb, prob=0.95,corr=TRUE)
-  
-  
-  depth_hyp <- ulam(
-    alist(
-      depth_hyp ~ dnorm(mu, sigma),
-      mu <- b0 + b1 * expected_depth_hyp,
-      b0 ~ dnorm(0, 1e4),
-      b1 ~ dnorm(0, 1e4),
-      sigma ~ dcauchy(2.6, 1e4) #2.6 sigma prior from Kekecs et al. (2018)
-    ),
-    data=data_hyp,
-    constraints = list(sigma = "lower=0"),
-    chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
-  
-  print("Hypnotic Depth (Conventional), Stan estimates")
-  precis(depth_hyp, prob=0.95,corr=TRUE)
-  
+
   #decision
+  ROPE <- -1
+  parameters <- precis(depth.m1, prob=0.95,corr=TRUE)
+  HDI_low <- parameters$`2.5%`[1]
+  HDI_high <- parameters$`97.5%`[1]
   
-  ROPE <- (precis(depth_hyp, prob=0.95,corr=TRUE)$`mean`[1] - 1)
   
-  HDI_low <- precis(depth_plb, prob=0.95,corr=TRUE)$`2.5%`[1] 
-  
-  decision = if(HDI_low < ROPE){"H1"} else if (HDI_low > 0){"H0"} else {"inconclusive"} 
+  decision = if(ROPE < HDI_low){"H0"} else if (ROPE > HDI_high){"H1"} else {"inconclusive"} 
   
   return(decision)
 
 }
 
-
-
+# hypothesis 2 is simulated to be false
 
 iter=1
 
