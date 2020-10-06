@@ -277,12 +277,12 @@ names(plb_hyp_data) = varnames_plb_hyp_data
 data_hyp$analgesia <- (data_hyp$tolerance_hyp - data_hyp$outcome_baseline)
 data_plb$analgesia <- (data_plb$tolerance_plb - data_plb$outcome_baseline)
 
-#analgesia difference bw/ conditions
+#compute difference bw/ change score
 plb_hyp_data$analgesia_difference <- (data_plb$analgesia - data_hyp$analgesia)
-mean(plb_hyp_data$analgesia_difference)
+
+#compute sigma prior for difference in change scores
 
 #specify model
-
 analgesia_difference.m1 <- ulam(
   alist(
     analgesia_difference ~ dnorm( mu, sigma ),
@@ -292,10 +292,11 @@ analgesia_difference.m1 <- ulam(
     b2 ~ dnorm(0, 1e4),
     b3 ~ dnorm(0, 1e4),
     b4 ~ dnorm(0, 1e4),
-    sigma ~ dcauchy(70,1e4)      #sigma prior based on Baker & Kirsch (1993) and Liu et al. (2013)
+    sigma ~ dcauchy(70,1e4)      #sigma prior based on Liu et al. (2013) 
+
   ) ,
   data=plb_hyp_data,
-  constraints = list(b0 = "upper=0", sigma = "lower=0"), #b0 is restricted to negative domain (directional hypothesis)
+  constraints = list(b0 = "upper=0", sigma = "lower=0"), #b0 is restricted to negative domain (directional hypothesis assuming better analgesia in the conventional hypnosis condition)
   chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
 
 # inspect hypnosis model results
@@ -306,7 +307,7 @@ precis(analgesia_difference.m1, prob=0.95,corr=TRUE)
 parameters <- precis(analgesia_difference.m1, prob=0.95,corr=TRUE)
 HDI_low <- parameters$`2.5%`[1]
 HDI_high <- parameters$`97.5%`[1]
-ROPE = -15                        # ROPE based on Baker & Kirsch (1993) and Liu et al. (2003)
+ROPE = -15                        # ROPE is intended to reflect an effect size of d=0.2 in line with Baker & Kirsch (1993) and Liu et al. (2013)
 decision = if(ROPE < HDI_low){"H0"} else if (ROPE > HDI_high){"H1"} else {"inconclusive"} 
 
 print(decision)
@@ -339,7 +340,6 @@ depth_difference.m1 <- ulam(
 
 print("Hypnotic Depth Difference (hyp - plb), Stan estimates")
 precis(depth_difference.m1, prob=0.95,corr=TRUE)
-
 
 #decision
 
@@ -453,7 +453,7 @@ parameters <- precis(manipulation_check.m1, prob=0.95,corr=TRUE)
 parameters <- precis(manipulation_check.m2, prob=0.95,corr=TRUE)
 HDI_low <- parameters$`2.5%`[1]
 HDI_high <- parameters$`97.5%`[1]
-ROPE = -15                        # ROPE based on Baker & Kirsch (1993) and Liu et al. (2003)
+ROPE = -15                        # ROPE is intended to reflect an effect size of d=0.2 in line with Baker & Kirsch (1993) and Liu et al. (2013)
 decision = if(ROPE < HDI_low){"H0"} else if (ROPE > HDI_high){"H1"} else {"inconclusive"} 
 
 print(decision)
