@@ -6,6 +6,7 @@
 
 graphics.off()
 rm(list=ls(all=TRUE))
+setwd("C:/R.working.directory/")
 
 library(MASS)
 library(tidyverse)
@@ -212,6 +213,7 @@ data <-  simul(  n = 50,
 )
 
 
+#separate data for the two conditions into two separate dataframes
 data_hyp <- data[ which(data$condition_hyp==1 ), ]
 data_plb <- data[ which(data$condition_hyp==0 ), ]
 
@@ -227,14 +229,32 @@ names(data_plb)[12] <- "expected_pain_reduction_plb"
 names(data_plb)[14] <- "expected_depth_plb"
 names(data_plb)[16] <- "depth_plb"
 
+#standardize preidctory variables for interpretability of results
+ 
+data_hyp$age <- (data_hyp$age - mean(data_hyp$age))/sd(data_hyp$age)
+data_hyp$height <- (data_hyp$height - mean(data_hyp$height))/sd(data_hyp$height)
+data_hyp$FPQ_total <- (data_hyp$FPQ_total - mean(data_hyp$FPQ_total))/sd(data_hyp$FPQ_total)
+data_hyp$expected_CPT_pain_hyp <- (data_hyp$expected_CPT_pain_hyp - mean(data_hyp$expected_CPT_pain_hyp))/sd(data_hyp$expected_CPT_pain_hyp )
+data_hyp$expected_depth_hyp <- (data_hyp$expected_depth_hyp - mean(data_hyp$expected_depth_hyp )) / sd(data_hyp$expected_depth_hyp) 
+
+data_plb$age <- (data_plb$age - mean(data_plb$age))/sd(data_plb$age)
+data_plb$height <- (data_plb$height - mean(data_plb$height))/sd(data_plb$height)
+data_plb$FPQ_total <- (data_plb$FPQ_total - mean(data_plb$FPQ_total))/sd(data_plb$FPQ_total)
+data_plb$expected_CPT_pain_hyp <- (data_plb$expected_CPT_pain_plb - mean(data_plb$expected_CPT_pain_plb))/sd(data_plb$expected_CPT_pain_plb)
+data_plb$expected_depth_plb <- (data_plb$expected_depth_plb - mean(data_plb$expected_depth_plb)) / sd(data_plb$expected_depth_plb) 
+
+#merge relevant variables to a single dataset
+
 plb_hyp_data <- cbind(data_hyp$ID, data_hyp$age, data_hyp$female, data_hyp$height,             #demographics
                       data_hyp$outcome_baseline, data_hyp$hypnotizability, data_hyp$FPQ_total, #baseline and hypnotizability
                       data_hyp$expected_CPT_pain_hyp, data_hyp$expected_pain_reduction_hyp, data_hyp$expected_depth_hyp, 
-                      data_hyp$depth_hyp, data_hyp$outcome_hyp,                                #hypnosis condition
+                      data_hyp$depth_hyp, data_hyp$tolerance_hyp,                                #hypnosis condition
                       data_plb$expected_CPT_pain_plb, data_plb$expected_pain_reduction_plb, data_plb$expected_depth_plb, 
-                      data_plb$depth_plb, data_plb$outcome_plb)                                #placebo condition
+                      data_plb$depth_plb, data_plb$tolerance_plb)                                #placebo condition
 
 plb_hyp_data <- as.data.frame(plb_hyp_data)
+
+#name dataset
 
 varnames_plb_hyp_data = c(
   "ID", "age", "female", "height", 
@@ -247,101 +267,43 @@ varnames_plb_hyp_data = c(
 
 names(plb_hyp_data) = varnames_plb_hyp_data
 
-
-
 ##############################
 ###Hypothesis 1: Analgesia ###
 ##############################
 
-# this hypothesis seeks to establish equivalent pain tolerance/hypnoanalgesia
+# this hypothesis seeks to test whether hypnoanalgesia was stronger in the conventional hypnosis condition
 
+#extract change scores
+data_hyp$analgesia <- (data_hyp$tolerance_hyp - data_hyp$outcome_baseline)
+data_plb$analgesia <- (data_plb$tolerance_plb - data_plb$outcome_baseline)
 
-#standardize variables for interpretability (optional)
+#analgesia difference bw/ conditions
+plb_hyp_data$analgesia_difference <- (data_plb$analgesia - data_hyp$analgesia)
+mean(plb_hyp_data$analgesia_difference)
 
-#data_hyp$tolerance_hyp <- data_hyp$tolerance_hyp - mean(data_hyp$tolerance_hyp)/sd(data_hyp$tolerance_hyp)
-#data_hyp$age <- data_hyp$age - mean(data_hyp$age)/sd(data_hyp$age)
-#data_hyp$height <- data_hyp$height - mean(data_hyp$height)/sd(data_hyp$height)
-#data_hyp$FPQ_total <- data_hyp$FPQ_total - mean(data_hyp$FPQ_total)/sd(data_hyp$FPQ_total)
-#data_hyp$expected_CPT_pain_hyp <- data_hyp$expected_CPT_pain_hyp - mean(data_hyp$expected_CPT_pain_hyp )/sd(data_hyp$expected_CPT_pain_hyp )
-#data_hyp$expected_pain_reduction_hyp <- data_hyp$expected_pain_reduction_hyp - mean(data_hyp$expected_pain_reduction_hyp )/sd(data_hyp$expected_pain_reduction_hyp )
+#specify model
 
-#data_plb$tolerance_plb <- data_plb$tolerance_plb - mean(data_plb$tolerance_plb)/sd(data_plb$tolerance_plb)
-#data_plb$age <- data_plb$age - mean(data_plb$age)/sd(data_plb$age)
-#data_plb$height <- data_plb$height - mean(data_plb$height)/sd(data_plb$height)
-#data_hyp$FPQ_total <- data_hyp$FPQ_total - mean(data_hyp$FPQ_total)/sd(data_hyp$FPQ_total)
-#data_hyp$expected_CPT_pain_hyp <- data_hyp$expected_CPT_pain_hyp - mean(data_hyp$expected_CPT_pain_hyp)/sd(data_hyp$expected_CPT_pain_hyp)
-#data_hyp$expected_pain_reduction_hyp <- data_hyp$expected_pain_reduction_hyp - mean(data_hyp$expected_pain_reduction_hyp)/sd(data_hyp$expected_pain_reduction_hyp)
-
-
-# specify hypnosis model
-
-tolerance_hyp.m1 <- ulam(
+analgesia_difference.m1 <- ulam(
   alist(
-    tolerance_hyp ~ dnorm( mu, sigma ),
-    mu <- b0 + b1 * age + b2 * female + b3 * height + b4 * FPQ_total + b5 * expected_CPT_pain_hyp + b6 * expected_pain_reduction_hyp,  #pain exp and analg exp
-    b0 ~ dnorm(0, 1e4),
+    analgesia_difference ~ dnorm( mu, sigma ),
+    mu <- b0 + b1 * age + b2 * female + b3 * height + b4 * FPQ_total, 
+    b0 ~ dnorm(-15, 1e4),        #b0 prior based on Baker & Kirsch (1993) and Liu et al. (2013)
     b1 ~ dnorm(0, 1e4),
     b2 ~ dnorm(0, 1e4),
     b3 ~ dnorm(0, 1e4),
     b4 ~ dnorm(0, 1e4),
-    b5 ~ dnorm(0, 1e4),
-    b6 ~ dnorm(0, 1e4),
     sigma ~ dcauchy(70,1e4)      #sigma prior based on Baker & Kirsch (1993) and Liu et al. (2013)
   ) ,
-  data=data_hyp,
-  constraints = list(sigma = "lower=0"),
+  data=plb_hyp_data,
+  constraints = list(b0 = "upper=0", sigma = "lower=0"), #b0 is restricted to negative domain (directional hypothesis)
   chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
 
 # inspect hypnosis model results
-print("Pain Tolerance (Hypnosis), Stan estimates")
-precis(tolerance_hyp.m1, prob=0.95,corr=TRUE)
-
-
-
-# specify placebo model
-
-tolerance_plb.m1 <- ulam(
-  alist(
-    tolerance_plb ~ dnorm( mu, sigma ),
-    mu <- b0 + b1 * age + b2 * female + b3 * height + b4 * FPQ_total  + b5 * expected_CPT_pain_plb + b6 *expected_pain_reduction_plb,
-    b0 ~ dnorm(0, 1e4),
-    b1 ~ dnorm(0, 1e4),
-    b2 ~ dnorm(0, 1e4),
-    b3 ~ dnorm(0, 1e4),
-    b4 ~ dnorm(0, 1e4),
-    b5 ~ dnorm(0, 1e4),
-    b6 ~ dnorm(0, 1e4),
-    sigma ~ dcauchy(0,1e4)      #sigma prior based on Baker & Kirsch (1993) and Liu et al. (2013)
-  ) ,
-  data=data_plb,
-  constraints = list(sigma = "lower=0"),
-  chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
-
-# inspect results
-print("Pain tolerance (Placebo), Stan estimates")
-precis(tolerance_plb.m1, prob=0.95,corr=TRUE)
-
-
-
-# difference model
-plb_hyp_data$tolerance_diff = data_plb$tolerance_plb - data_hyp$tolerance_hyp
-
-tolerance.m1 <- ulam(
-  alist(
-    tolerance_diff ~ dnorm(mu, sigma),
-    mu <- b0,
-    b0 ~ dnorm(-15, 1e4),        # b0 prior based on Baker & Kirsch (1993) and Liu et al. (2003)
-    sigma ~ dcauchy(0, 1e4)      #sigma prior based on Baker & Kirsch (1993) and Liu et al. (2013)
-  ),
-  data=plb_hyp_data,
-  constraints = list(sigma = "lower=0"),
-  chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
-
-precis(tolerance.m1, prob=0.95,corr=TRUE)
-
+print("Analgesia Difference (plb- hyp), Stan estimates")
+precis(analgesia_difference.m1, prob=0.95,corr=TRUE)
 
 #decision
-parameters <- precis(tolerance.m1, prob=0.95,corr=TRUE)
+parameters <- precis(analgesia_difference.m1, prob=0.95,corr=TRUE)
 HDI_low <- parameters$`2.5%`[1]
 HDI_high <- parameters$`97.5%`[1]
 ROPE = -15                        # ROPE based on Baker & Kirsch (1993) and Liu et al. (2003)
@@ -351,82 +313,42 @@ print(decision)
 
 
 ######################################
-### Hypothesis 2: Depth Expectancy ###
+### Hypothesis 2: Depth Difference ###
 ######################################
 
-# this hypothesis seeks to establish equivalent depth expectancy
+# this hypothesis seeks to establish equivalent depth expectancy in conventional and embedded hypnosis
 
-depth_plb <- ulam(
+#create a difference score for depth bw/ conditions
+
+plb_hyp_data$depth_difference <- (plb_hyp_data$depth_plb - plb_hyp_data$depth_hyp)
+
+#specify model
+
+depth_difference.m1 <- ulam(
   alist(
-    depth_plb ~ dnorm(mu, sigma),
-    mu <- b0 + b1 * expected_depth_plb,
-    b0 ~ dnorm(0, 1e4),
+    depth_difference ~ dnorm(mu, sigma),
+    mu <- b0 + b1 * depth_expectancy_plb + b2 * depth_expectancy_hyp,
+    b0 ~ dnorm(0, 1e4),       # b0 prior based on Kekecs et al. (2018)
     b1 ~ dnorm(0, 1e4),
-    sigma ~ dcauchy(2.6, 1e4) #2.6 sigma prior from Kekecs et al. (2018)
-  ),
-  data=data_plb,
-  constraints = list(sigma = "lower=0"),
-  chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
-
-print("Hypnotic Depth (Embedded), Stan estimates")
-precis(depth_plb, prob=0.95,corr=TRUE)
-
-
-depth_hyp <- ulam(
-  alist(
-    depth_hyp ~ dnorm(mu, sigma),
-    mu <- b0 + b1 * expected_depth_hyp,
-    b0 ~ dnorm(0, 1e4),
-    b1 ~ dnorm(0, 1e4),
-    sigma ~ dcauchy(2.6, 1e4) #2.6 sigma prior from Kekecs et al. (2018)
-  ),
-  data=data_hyp,
-  constraints = list(b0="upper=0", sigma = "lower=0"),
-  chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
-
-print("Hypnotic Depth (Conventional), Stan estimates")
-precis(depth_hyp, prob=0.95,corr=TRUE)
-
-#decision
-
-ROPE <- (precis(depth_hyp, prob=0.95,corr=TRUE)$`mean`[1] - 1)
-
-HDI_low <- precis(depth_plb, prob=0.95,corr=TRUE)$`2.5%`[1] 
-HDI_high <- precis(depth_plb, prob=0.95,corr=TRUE)$`97.5%`[1] 
-
-
-decision = if(ROPE < HDI_low){"H0"} else if (ROPE < HDI_high){"H1"} else {"inconclusive"} 
-
-print(decision)
-
-
-#test model
-
-plb_hyp_data$depth_diff = data_plb$depth_plb - data_hyp$depth_hyp
-
-depth.m1 <- ulam(
-  alist(
-    depth_diff ~ dnorm(mu, sigma),
-    mu <- b0,                    
-    b0 ~ dnorm(0, 1e4),        # b0 prior based on Kekecs et al. (2018)
-    sigma ~ dcauchy(2.6, 1e4)  # sigma prior based on Kekecs et al. (2018)
+    b2 ~ dnorm(0, 1e4),
+    sigma ~ dcauchy(2.6, 1e4) # sigma prior based on Kekecs et al. (2018)
   ),
   data=plb_hyp_data,
   constraints = list(sigma = "lower=0"),
   chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
 
-precis(depth.m1, prob=0.95,corr=TRUE)
+print("Hypnotic Depth Difference (hyp - plb), Stan estimates")
+precis(depth_difference.m1, prob=0.95,corr=TRUE)
 
 
 #decision
-parameters <- precis(depth.m1, prob=0.95,corr=TRUE)
-HDI_low <- parameters$`2.5%`[1]
-HDI_high <- parameters$`97.5%`[1]
-ROPE = -1                       # ROPE based on Baker & Kirsch (1993) and Liu et al. (2003)
+
+HDI_low <- precis(depth_difference.m1, prob=0.95,corr=TRUE)$`2.5%`[1] 
+HDI_high <- precis(depth_difference.m1, prob=0.95,corr=TRUE)$`97.5%`[1] 
+ROPE <- (-1)
 decision = if(ROPE < HDI_low){"H0"} else if (ROPE > HDI_high){"H1"} else {"inconclusive"} 
 
 print(decision)
-
 
 ##########################################
 ### Hypothesis 3: Analgesia Expectancy ###
@@ -434,12 +356,13 @@ print(decision)
 
 # this hypothesis seeks to establish equivalent expectations of hypnoanalgesia
 
+#create difference scores for analgesia expectancy
+plb_hyp_data$analgesia_expectancy_difference <- (plb_hyp_data$analgesia_expectancy_hyp - plb_hyp_data$analgesia_expectancy_plb)
+mean(plb_hyp_data$analgesia_expectancy_difference)
 
-plb_hyp_data$analgesia_diff <- (plb_hyp_data$analgesia_expectancy_hyp - plb_hyp_data$analgesia_expectancy_plb)
-
-analg_m1 <- ulam(
+analgesia_expectancy.m1 <- ulam(
   alist(
-    analgesia_diff ~ dnorm(mu, sigma),
+    analgesia_expectancy_difference ~ dnorm(mu, sigma),
     mu ~ dnorm(0, 1e4),       # b0 prior based on Kekecs et al. (2018)
     sigma ~ dcauchy(2, 1e4)   # sigma prior based on Kekecs et al. (2018)
   ),
@@ -448,22 +371,13 @@ analg_m1 <- ulam(
   chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
 
 print("Expected analgesia difference (hyp - plb), Stan estimates")
-precis(analg_m1, prob=0.95,corr=TRUE)
+precis(analgesia_expectancy.m1, prob=0.95,corr=TRUE)
 
-
-ROPE <- (precis(depth_hyp, prob=0.95,corr=TRUE)$`mean`[1] - 1)
-
-HDI_low <- precis(depth_plb, prob=0.95,corr=TRUE)$`2.5%`[1] 
-HDI_high <- precis(depth_plb, prob=0.95,corr=TRUE)$`97.5%`[1] 
-
-
-ROPE=1
-
-mu_hyp <- precis(analg_m1, prob=0.95)[1,1]
-
-decision = if(ROPE < mu_hyp){"H1"} else if (ROPE > mu_hyp){"H0"} else {"inconclusive"} 
-
-
+#decision
+ROPE <- (- 1)
+HDI_low <- precis(analgesia_expectancy.m1, prob=0.95,corr=TRUE)$`2.5%`[1] 
+HDI_high <- precis(analgesia_expectancy.m1, prob=0.95,corr=TRUE)$`97.5%`[1] 
+decision = if(ROPE > HDI_high){"H1"} else if (ROPE < HDI_low){"H0"} else {"inconclusive"} 
 
 print(decision)
 
@@ -472,14 +386,19 @@ print(decision)
 ### Hypothesis 4: Depth Expectancy ###
 ######################################
 
-# this hypothesis seeks to establish equivalent expectancy of hypnotic depth
+# this hypothesis seeks to establish equivalent expectations of hypnotic depth
 
+# reimport simulated data such that it is no longer standardized
+data_hyp <- data[ which(data$condition_hyp==1 ), ]
+data_plb <- data[ which(data$condition_hyp==0 ), ]
 
-plb_hyp_data$depth_exp_diff = plb_hyp_data$depth_expectancy_plb - plb_hyp_data$depth_expectancy_hyp
+# extract difference score
+plb_hyp_data$depth_exp_difference = data_plb$expectancy_hypnotic_depth - data_hyp$expectancy_hypnotic_depth
 
-depth_m1 <- ulam(
+#specify model
+depth_expectancy.m1 <- ulam(
   alist(
-    depth_exp_diff ~ dnorm(mu, sigma),
+    depth_exp_difference ~ dnorm(mu, sigma),
     mu ~ dnorm(0, 1e4),         # b0 prior based on Kekecs et al. (2018)
     sigma ~ dcauchy(2.5, 1e4)   # sigma prior based on Kekecs et al. (2018)
   ),
@@ -488,13 +407,15 @@ depth_m1 <- ulam(
   chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
 
 print("Depth expectancy difference (hyp - plb), Stan estimates")
-parameters <- precis(depth_m1, prob=0.95,corr=TRUE)
+precis(depth_expectancy.m1, prob=0.95,corr=TRUE)
 
-HDI_low <- precis(depth_m1, prob=0.95,corr=TRUE)$`2.5%`[1] 
+#decision
+HDI_low <- precis(depth_expectancy.m1, prob=0.95,corr=TRUE)$`2.5%`[1] 
+HDI_high <- precis(depth_expectancy.m1, prob=0.95,corr=TRUE)$`97.5%`[1] 
 ROPE = -1
-decision = if(HDI_low < ROPE){"H1"} else if (HDI_low > 0){"H0"} else {"inconclusive"} 
+decision = if(HDI_high < ROPE){"H1"} else if (HDI_low > ROPE){"H0"} else {"inconclusive"} 
 
-return(decision)
+print(decision)
 
 #######################################################
 ### Hypothesis 5: Hypnoanalgesia manipulation check ###
@@ -502,39 +423,31 @@ return(decision)
 
 # this is a manipulation check intended to ensure that hypnoanalgesia was succesfully induced
 
-data_hyp$hypnoanalgesia <- data_hyp$outcome_baseline - data_hyp$tolerance_hyp
+#compute difference (hypnoanalgesia) score (hypnosis tolerance - baseline tolerance)
+plb_hyp_data$hypnoanalgesia <- (plb_hyp_data$baseline_tolerance - plb_hyp_data$tolerance_hyp)
 
-mean(data_hyp$hypnoanalgesia)
+#standardize predictor variables
+plb_hyp_data$depth_hyp <- (plb_hyp_data$depth_hyp- mean(plb_hyp_data$depth_hyp))/sd(plb_hyp_data$depth_hyp)
+plb_hyp_data$analgesia_expectancy_hyp <- (plb_hyp_data$analgesia_expectancy_hyp- mean(plb_hyp_data$analgesia_expectancy_hyp))/sd(plb_hyp_data$analgesia_expectancy_hyp)
 
-manipulation_check_hyp.m1 <- ulam(
+#specify model
+manipulation_check.m1 <- ulam(
   alist(
     hypnoanalgesia ~ dnorm(mu, sigma),
-    mu <- b0 + b1 * depth_hyp + b2 * expected_pain_reduction_hyp,
+    mu <- b0 + b1 * depth_hyp + b2 * analgesia_expectancy_hyp,
     b0 ~ dnorm(0, 1e4),
     b1 ~ dnorm(0, 1e4),
     b2 ~ dnorm(0, 1e4),
     sigma ~ dcauchy(0, 1e4) 
   ),
-  data=data_hyp,
+  data=plb_hyp_data,
   constraints = list(sigma = "lower=0"),
   chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
 
-print("Hypnoanalgesia, Stan estimates")
-parameters <- precis(manipulation_check_hyp.m1, prob=0.95,corr=TRUE)
+print("Hypnoanalgesia (baseline - hypnosis), Stan estimates")
+precis(manipulation_check.m1, prob=0.95,corr=TRUE)
 
-
-#test model
-manipulation_check_hyp.m2 <- ulam(
-  alist(
-    hypnoanalgesia ~ dnorm(mu, sigma),
-    mu <- b0,
-    b0 ~ dnorm(0, 1e4),
-    sigma ~ dcauchy(0, 1e4) 
-  ),
-  data=data_hyp,
-  constraints = list(sigma = "lower=0"),
-  chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
-
+parameters <- precis(manipulation_check.m1, prob=0.95,corr=TRUE)
 
 #decision
 parameters <- precis(manipulation_check.m2, prob=0.95,corr=TRUE)
