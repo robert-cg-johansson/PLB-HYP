@@ -7,6 +7,7 @@
 graphics.off()
 rm(list=ls(all=TRUE))
 
+
 library(MASS)
 library(tidyverse)
 library(rethinking)
@@ -17,7 +18,7 @@ library(rstan)
 nCores = parallel::detectCores() 
 chains <- nCores <- nCores-1
 
-
+#simulation functions
 simulate_data_with_moderators = function(
   n,
   mean_hyp,
@@ -174,37 +175,55 @@ simul = function(
     sd_hypnotizability = sd_hypnotizability,
     mean_hypnotizability = mean_hypnotizability
   )
+ 
   
   
-  
-  
-  
+  #separate data for the two conditions into two separate dataframes
   data_hyp <- data[ which(data$condition_hyp==1 ), ]
   data_plb <- data[ which(data$condition_hyp==0 ), ]
   
   names(data_hyp)[6] <- "expected_CPT_pain_hyp"
-  names(data_hyp)[10] <- "outcome_hyp"
+  names(data_hyp)[10] <- "tolerance_hyp"
   names(data_hyp)[12] <- "expected_pain_reduction_hyp"
   names(data_hyp)[14] <- "expected_depth_hyp"
   names(data_hyp)[16] <- "depth_hyp"
   
   names(data_plb)[6] <- "expected_CPT_pain_plb"
-  names(data_plb)[10] <- "outcome_plb"
+  names(data_plb)[10] <- "tolerance_plb"
   names(data_plb)[12] <- "expected_pain_reduction_plb"
   names(data_plb)[14] <- "expected_depth_plb"
   names(data_plb)[16] <- "depth_plb"
   
+  #standardize preidctory variables for interpretability of results
+  
+  data_hyp$age <- (data_hyp$age - mean(data_hyp$age))/sd(data_hyp$age)
+  data_hyp$height <- (data_hyp$height - mean(data_hyp$height))/sd(data_hyp$height)
+  data_hyp$FPQ_total <- (data_hyp$FPQ_total - mean(data_hyp$FPQ_total))/sd(data_hyp$FPQ_total)
+  data_hyp$expected_CPT_pain_hyp <- (data_hyp$expected_CPT_pain_hyp - mean(data_hyp$expected_CPT_pain_hyp))/sd(data_hyp$expected_CPT_pain_hyp )
+  data_hyp$expected_depth_hyp <- (data_hyp$expected_depth_hyp - mean(data_hyp$expected_depth_hyp )) / sd(data_hyp$expected_depth_hyp) 
+  
+  data_plb$age <- (data_plb$age - mean(data_plb$age))/sd(data_plb$age)
+  data_plb$height <- (data_plb$height - mean(data_plb$height))/sd(data_plb$height)
+  data_plb$FPQ_total <- (data_plb$FPQ_total - mean(data_plb$FPQ_total))/sd(data_plb$FPQ_total)
+  data_plb$expected_CPT_pain_hyp <- (data_plb$expected_CPT_pain_plb - mean(data_plb$expected_CPT_pain_plb))/sd(data_plb$expected_CPT_pain_plb)
+  data_plb$expected_depth_plb <- (data_plb$expected_depth_plb - mean(data_plb$expected_depth_plb)) / sd(data_plb$expected_depth_plb) 
+  
+  #merge relevant variables to a single dataset
+  
   plb_hyp_data <- cbind(data_hyp$ID, data_hyp$age, data_hyp$female, data_hyp$height,             #demographics
                         data_hyp$outcome_baseline, data_hyp$hypnotizability, data_hyp$FPQ_total, #baseline and hypnotizability
-                        data_hyp$expected_CPT_pain_hyp,data_hyp$expected_pain_reduction_hyp, data_hyp$expected_depth_hyp, 
-                        data_hyp$depth_hyp, data_hyp$outcome_hyp,                                #hypnosis condition
+                        data_hyp$expected_CPT_pain_hyp, data_hyp$expected_pain_reduction_hyp, data_hyp$expected_depth_hyp, 
+                        data_hyp$depth_hyp, data_hyp$tolerance_hyp,                                #hypnosis condition
                         data_plb$expected_CPT_pain_plb, data_plb$expected_pain_reduction_plb, data_plb$expected_depth_plb, 
-                        data_plb$depth_plb, data_plb$outcome_plb)                                #placebo condition
+                        data_plb$depth_plb, data_plb$tolerance_plb)                                #placebo condition
   
   plb_hyp_data <- as.data.frame(plb_hyp_data)
   
+  #name dataset
+  
   varnames_plb_hyp_data = c(
-    "ID", "age", "female", "height", "baseline_tolerance", "hypnotizability", "FPQ_total", 
+    "ID", "age", "female", "height", 
+    "baseline_tolerance", "hypnotizability", "FPQ_total", 
     "pain_expectancy_hyp", "analgesia_expectancy_hyp", "depth_expectancy_hyp", 
     "depth_hyp", "tolerance_hyp",
     "pain_expectancy_plb", "analgesia_expectancy_plb", "depth_expectancy_plb", 
@@ -213,24 +232,43 @@ simul = function(
   
   names(plb_hyp_data) = varnames_plb_hyp_data
   
-  plb_hyp_data$hypnoanalgesia = plb_hyp_data$baseline_tolerance - plb_hyp_data$tolerance_hyp
+  #######################################################
+  ### Hypothesis 5: Hypnoanalgesia manipulation check ###
+  #######################################################
   
+  # this is a manipulation check intended to ensure that hypnoanalgesia was succesfully induced
+  
+  #compute difference (hypnoanalgesia) score (hypnosis tolerance - baseline tolerance)
+  plb_hyp_data$hypnoanalgesia <- (plb_hyp_data$baseline_tolerance - plb_hyp_data$tolerance_hyp)
+  
+  #standardize predictor variables
+  plb_hyp_data$depth_hyp <- (plb_hyp_data$depth_hyp- mean(plb_hyp_data$depth_hyp))/sd(plb_hyp_data$depth_hyp)
+  plb_hyp_data$analgesia_expectancy_hyp <- (plb_hyp_data$analgesia_expectancy_hyp- mean(plb_hyp_data$analgesia_expectancy_hyp))/sd(plb_hyp_data$analgesia_expectancy_hyp)
+  
+  #specify model
   manipulation_check.m1 <- ulam(
     alist(
       hypnoanalgesia ~ dnorm(mu, sigma),
-      mu <- b0,
+      mu <- b0 + b1 * depth_hyp + b2 * analgesia_expectancy_hyp,
       b0 ~ dnorm(0, 1e4),
+      b1 ~ dnorm(0, 1e4),
+      b2 ~ dnorm(0, 1e4),
       sigma ~ dcauchy(0, 1e4) 
     ),
     data=plb_hyp_data,
     constraints = list(sigma = "lower=0"),
     chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
   
+  print("Hypnoanalgesia (baseline - hypnosis), Stan estimates")
+  precis(manipulation_check.m1, prob=0.95,corr=TRUE)
+  
+  parameters <- precis(manipulation_check.m1, prob=0.95,corr=TRUE)
+  
   #decision
   parameters <- precis(manipulation_check.m1, prob=0.95,corr=TRUE)
   HDI_low <- parameters$`2.5%`[1]
   HDI_high <- parameters$`97.5%`[1]
-  ROPE = -15                        # ROPE based on Baker & Kirsch (1993) and Liu et al. (2003)
+  ROPE = -15                        # ROPE is intended to reflect an effect size of d=0.2 in line with Baker & Kirsch (1993) and Liu et al. (2013)
   decision = if(ROPE < HDI_low){"H0"} else if (ROPE > HDI_high){"H1"} else {"inconclusive"} 
   
   return(decision)
@@ -239,11 +277,9 @@ simul = function(
 }
 
 
-
-
 # hypothesis 5 is simulated to be true
 
-iter=1
+iter=3
 
 results = replicate(iter, simul(  n = 50,
                                   mean_hyp = 136,
