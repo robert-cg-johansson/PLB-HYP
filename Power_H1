@@ -20,7 +20,7 @@ library(pkgcond)
 nCores = parallel::detectCores() 
 chains <- nCores <- nCores-1
 
-
+#simulation functions
 
 simulate_data_with_moderators = function(
   n,
@@ -266,9 +266,6 @@ simul = function(
     constraints = list(b0 = "upper=0", sigma = "lower=0"), #b0 is restricted to negative domain (directional hypothesis)
     chains=chains, cores=nCores,  iter=5000, warmup=2000, sample=TRUE, log_lik=TRUE)
   
-  # inspect hypnosis model results
-  print("Analgesia Difference (plb- hyp), Stan estimates")
-  precis(analgesia_difference.m1, prob=0.95,corr=TRUE)
   
   #decision
   parameters <- precis(analgesia_difference.m1, prob=0.95,corr=TRUE)
