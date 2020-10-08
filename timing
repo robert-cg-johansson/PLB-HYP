@@ -203,7 +203,7 @@ simul = function(
   names(data_plb)[14] <- "expected_depth_plb"
   names(data_plb)[16] <- "depth_plb"
   
-  #standardize preidctory variables for interpretability of results
+  #standardize preidctor variables for interpretability of results
   
   data_hyp$age <- (data_hyp$age - mean(data_hyp$age))/sd(data_hyp$age)
   data_hyp$height <- (data_hyp$height - mean(data_hyp$height))/sd(data_hyp$height)
@@ -253,7 +253,6 @@ simul = function(
   
   #analgesia difference bw/ conditions
   plb_hyp_data$analgesia_difference <- (data_plb$analgesia - data_hyp$analgesia)
-  mean(plb_hyp_data$analgesia_difference)
   
   #specify model
   
@@ -274,6 +273,7 @@ simul = function(
   
   
   #decision
+  
   parameters <- precis(analgesia_difference.m1, prob=0.95,corr=TRUE)
   HDI_low <- parameters$`2.5%`[1]
   HDI_high <- parameters$`97.5%`[1]
