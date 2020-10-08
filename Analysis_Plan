@@ -358,8 +358,8 @@ print(decision)
 
 #create difference scores for analgesia expectancy
 plb_hyp_data$analgesia_expectancy_difference <- (plb_hyp_data$analgesia_expectancy_hyp - plb_hyp_data$analgesia_expectancy_plb)
-mean(plb_hyp_data$analgesia_expectancy_difference)
 
+#specify model
 analgesia_expectancy.m1 <- ulam(
   alist(
     analgesia_expectancy_difference ~ dnorm(mu, sigma),
@@ -450,7 +450,7 @@ precis(manipulation_check.m1, prob=0.95,corr=TRUE)
 parameters <- precis(manipulation_check.m1, prob=0.95,corr=TRUE)
 
 #decision
-parameters <- precis(manipulation_check.m2, prob=0.95,corr=TRUE)
+parameters <- precis(manipulation_check.m1, prob=0.95,corr=TRUE)
 HDI_low <- parameters$`2.5%`[1]
 HDI_high <- parameters$`97.5%`[1]
 ROPE = -15                        # ROPE is intended to reflect an effect size of d=0.2 in line with Baker & Kirsch (1993) and Liu et al. (2013)
